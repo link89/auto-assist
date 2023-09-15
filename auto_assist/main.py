@@ -6,9 +6,9 @@ import asyncio
 import os
 import fire
 
-from .browser import BrowserManager
+from .browser import lauch_browser
+from .lib import USER_HOME
 
-USER_HOME = os.path.join(os.path.expanduser("~"), '.auto-assist')
 
 
 class Entry:
@@ -24,7 +24,7 @@ class Entry:
             self.config = {}
 
     def browser(self):
-        return BrowserCmd(self.config.get('browser', {}))
+        return BrowserCmd(self.config.get('browsers', {}))
 
 
 class BrowserCmd:
@@ -32,15 +32,13 @@ class BrowserCmd:
     def __init__(self, config: dict) -> None:
         self.config = config
 
-    def open(self, name: str = 'default'):
-        asyncio.run(self._open(name))
-
-
-    async def _open(self, name: str):
-        async with async_playwright() as p:
-            bm = BrowserManager(p, USER_HOME)
-            await bm.get_browser(name)
-            input('Press any key to exit ...')
+    def launch(self, name: str = 'default'):
+        config = self.config.get(name, {})
+        async def _launch():
+            async with async_playwright() as pw:
+                await lauch_browser(name, config, USER_HOME)(pw)
+                input('Press any key to exit ...')
+        asyncio.run(_launch())
 
 
 if __name__ == '__main__':
