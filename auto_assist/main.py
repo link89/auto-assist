@@ -1,4 +1,4 @@
-from typing import Optional
+from typing import Optional, List
 from ruamel.yaml import YAML
 from playwright.async_api import async_playwright
 
@@ -9,7 +9,7 @@ from contextlib import asynccontextmanager
 
 from .browser import lauch_browser
 from .lib import USER_HOME
-from .tasks import explore_author_network
+from .tasks import google_scholar as gs
 
 
 class Entry:
@@ -57,12 +57,23 @@ class TaskCmd:
     def __init__(self, entry: Entry) -> None:
         self._entry = entry
 
-    def explore_author_network(self, browser='default'):
+    def gs_search_by_authors(self,
+                             authors: List[str],
+                             out_dir: str = './out',
+                             page_limit=3,
+                             google_scholar_url='https://scholar.google.com/?hl=en&as_sdt=0,5',
+                             browser='default',
+                             ):
         async def run():
             async with self._entry.browser()._launch_async(browser) as _browser:
-                await explore_author_network.gs_search_by_authors(_browser)
+                await gs.gs_search_by_authors(
+                    _browser, authors=authors, out_dir=out_dir, page_limit=page_limit, google_scholar_url=google_scholar_url)
                 input('Press any key to exit ...')
         asyncio.run(run())
+
+    def list_gs_profile_urls(self, result_file: str):
+        gs.list_gs_profile_urls(result_file)
+
 
 
 if __name__ == '__main__':
