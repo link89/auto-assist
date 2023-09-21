@@ -1,8 +1,9 @@
 from playwright.async_api import BrowserContext, TimeoutError
-from typing import Any, List, TypedDict
-from urllib.parse import urlparse
+from typing import Any, List, TypedDict, Tuple, Dict
+from urllib.parse import urlparse, urljoin
 import os
 import json
+import sys
 
 from auto_assist.lib import get_logger
 
@@ -31,7 +32,7 @@ class GsProfileItem(TypedDict):
     url: str
     brief: str
     cited_stats: str
-    co_authors: List['GsProfileItem']
+    co_authors: List[GsProfileEntry]
 
 
 class GsSearchItem(TypedDict):
@@ -43,14 +44,41 @@ class GsSearchItem(TypedDict):
 async def gs_explore_profiles(browser: BrowserContext,
                               gs_profile_urls: List[str],
                               out_dir: str = './out',
-                              level_limit=2,
+                              level_limit = 2,
                               google_scholar_url='https://scholar.google.com/',
                               ):
 
     os.makedirs(out_dir, exist_ok=True)
     gs_profiles_file = os.path.join(out_dir, 'gs_profiles.jsonl')
 
+    # load existed data
+    gs_profiles: Dict[str, GsProfileItem] = {}
+    if os.path.exists(gs_profiles_file):
+        profile_list: List[GsProfileItem] = load_jsonl(gs_profiles_file)
+        gs_profiles = { get_gs_profile_id(profile['url']): profile for profile in profile_list }
 
+    queue: List[Tuple[str, int]] = [ (url, 0) for url in gs_profile_urls ]
+
+    gs_page = browser.pages[0]
+    while len(queue) > 0:
+        user_url, level = queue.pop(0)
+        if level > level_limit:
+            break
+
+        uid = get_gs_profile_id(user_url)
+        if uid in gs_profiles:
+            logger.info("profile %s has been processed", user_url)
+            co_authors = gs_profiles[uid]['co_authors']
+            queue.extend((author['url'], level+1) for author in co_authors)
+            continue
+        logger.info("process profile %s", user_url)
+
+        await gs_page.goto(urljoin(google_scholar_url, user_url))
+        profile = GsProfileItem()
+        profile['url'] = user_url
+        profile['name'] = await gs_page.locator('div#gsc_prf_in').inner_text()
+        profile['brief'] = await gs_page.locator('div#gsc_prf_w').inner_text()
+        profile['cited_stats'] = await gs_page.locator('table#gsc_rsb_st').inner_text()
 
 
 async def gs_search_by_authors(browser: BrowserContext,
@@ -142,15 +170,25 @@ async def gs_search_by_authors(browser: BrowserContext,
                     logger.exception("unexpected error occured")
 
 
-def list_gs_profile_urls(result_file: str):
+def gs_list_profile_urls(result_file: str):
     result: List[GsSearchItem] = load_jsonl(result_file)
     urls = set(profile['url'] for item in result for profile in item['profiles'])
-    for url in urls:
-        print(url)
+    print('\n'.join(urls))
+
+
+def gs_list_authors(result_file: str):
+    from colorama import deinit
+    deinit()
+    result: List[GsSearchItem] = load_jsonl(result_file)
+    names = set(author for item in result for author in item['citation']['authors'])
+    print('\n'.join(names))
 
 
 def get_gs_profile_id(url: str):
-    return urlparse(url).params['user']
+    # parse url and get user from query string
+    query = urlparse(url).query
+    params = dict(kv.split('=') for kv in query.split('&'))
+    return params['user']
 
 
 def load_jsonl(file: str):

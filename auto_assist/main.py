@@ -88,8 +88,12 @@ class TaskCmd:
         asyncio.run(run())
 
 
-    def list_gs_profile_urls(self, result_file: str):
-        gs.list_gs_profile_urls(result_file)
+    def gs_list_profile_urls(self, result_file: str):
+        gs.gs_list_profile_urls(result_file)
+
+
+    def gs_list_authors(self, result_file: str):
+        gs.gs_list_authors(result_file)
 
 
 
