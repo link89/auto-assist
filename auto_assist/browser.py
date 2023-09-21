@@ -13,9 +13,9 @@ def lauch_browser(name: str = 'default',
     config = {
         'channel': 'chrome',
         'user_data_dir': os.path.join(user_home,'user-data', name),
-        'downloads_path': './my-downloads',
         'headless': False,
         'ignore_https_errors': True,
+        'slow_mo': 1000,
         'ignore_default_args': [
             '--enable-automation',
             '--no-sandbox',

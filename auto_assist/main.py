@@ -41,7 +41,7 @@ class BrowserCmd:
 
     def launch(self, name: str = 'default'):
         async def run():
-            async for _ in self._launch_async(name):
+            async with self._launch_async(name):
                 input('Press any key to exit ...')
         asyncio.run(run())
 
@@ -60,7 +60,7 @@ class TaskCmd:
     def explore_author_network(self, browser='default'):
         async def run():
             async with self._entry.browser()._launch_async(browser) as _browser:
-                await explore_author_network.run(_browser)
+                await explore_author_network.gs_search_by_authors(_browser)
                 input('Press any key to exit ...')
         asyncio.run(run())
 
