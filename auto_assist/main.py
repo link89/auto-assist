@@ -74,15 +74,15 @@ class TaskCmd:
 
     def gs_explore_profiles(self,
                             out_dir: str = './out',
-                            level_limit=2,
-                            google_scholar_url=None,
+                            depth_limit=1,
+                            google_scholar_url='https://scholar.google.com/',
                             browser='default',
                             ):
         profile_urls = [line.strip() for line in sys.stdin]
         async def run():
             async with self._entry.browser()._launch_async(browser) as browser_ctx:
                 await gs.gs_explore_profiles(
-                    browser_ctx, gs_profile_urls=profile_urls, out_dir=out_dir, level_limit=level_limit, google_scholar_url=google_scholar_url,
+                    browser_ctx, gs_profile_urls=profile_urls, out_dir=out_dir, depth_limit=depth_limit, google_scholar_url=google_scholar_url,
                 )
                 pending()
         asyncio.run(run())

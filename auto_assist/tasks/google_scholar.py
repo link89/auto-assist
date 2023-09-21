@@ -30,9 +30,12 @@ class GsProfileEntry(TypedDict):
 class GsProfileItem(TypedDict):
     name: str
     url: str
+    homepage: str
     brief: str
     cited_stats: str
     co_authors: List[GsProfileEntry]
+    pdf_path: str
+    html_path: str
 
 
 class GsSearchItem(TypedDict):
@@ -44,41 +47,77 @@ class GsSearchItem(TypedDict):
 async def gs_explore_profiles(browser: BrowserContext,
                               gs_profile_urls: List[str],
                               out_dir: str = './out',
-                              level_limit = 2,
+                              depth_limit = 1,
                               google_scholar_url='https://scholar.google.com/',
                               ):
 
     os.makedirs(out_dir, exist_ok=True)
+
+    gs_pdf_dir = os.path.join(out_dir, 'gs_pdfs')
+    gs_html_dir = os.path.join(out_dir, 'gs_htmls')
+    os.makedirs(gs_pdf_dir, exist_ok=True)
+    os.makedirs(gs_html_dir, exist_ok=True)
+
     gs_profiles_file = os.path.join(out_dir, 'gs_profiles.jsonl')
 
     # load existed data
-    gs_profiles: Dict[str, GsProfileItem] = {}
+    gs_profile_map: Dict[str, GsProfileItem] = {}
     if os.path.exists(gs_profiles_file):
         profile_list: List[GsProfileItem] = load_jsonl(gs_profiles_file)
-        gs_profiles = { get_gs_profile_id(profile['url']): profile for profile in profile_list }
+        gs_profile_map = { get_gs_profile_id(profile['url']): profile for profile in profile_list }
 
     queue: List[Tuple[str, int]] = [ (url, 0) for url in gs_profile_urls ]
 
     gs_page = browser.pages[0]
     while len(queue) > 0:
         user_url, level = queue.pop(0)
-        if level > level_limit:
+        if level > depth_limit:
             break
 
         uid = get_gs_profile_id(user_url)
-        if uid in gs_profiles:
+        if uid in gs_profile_map:
             logger.info("profile %s has been processed", user_url)
-            co_authors = gs_profiles[uid]['co_authors']
+            co_authors = gs_profile_map[uid]['co_authors']
             queue.extend((author['url'], level+1) for author in co_authors)
             continue
         logger.info("process profile %s", user_url)
-
         await gs_page.goto(urljoin(google_scholar_url, user_url))
         profile = GsProfileItem()
         profile['url'] = user_url
         profile['name'] = await gs_page.locator('div#gsc_prf_in').inner_text()
         profile['brief'] = await gs_page.locator('div#gsc_prf_w').inner_text()
         profile['cited_stats'] = await gs_page.locator('table#gsc_rsb_st').inner_text()
+        try:
+            profile['homepage'] = await gs_page.locator('a.gsc_prf_ila').get_by_text("Homepage").get_attribute('href', timeout=1e3)
+        except TimeoutError:
+            profile['homepage'] = ''
+
+        co_authors = []
+        co_author_links = await gs_page.locator('ul.gsc_rsb_a li a').all()
+        for co_author_link in co_author_links:
+            name = await co_author_link.inner_text(),
+            url = await co_author_link.get_attribute('href')
+            co_authors.append(GsProfileEntry(name=name, url=url))
+            queue.append((url, level+1) )
+
+        profile['co_authors'] = co_authors
+        # save pdf
+        pdf_path = os.path.join(gs_pdf_dir, f'profile_{uid}.pdf')
+        await gs_page.pdf(path=pdf_path)
+        profile['pdf_path'] = pdf_path
+        # save html
+        html_path = os.path.join(gs_html_dir, f'profile_{uid}.html')
+        html_text = await gs_page.content()
+        with open(html_path, 'w', encoding='utf-8') as fp:
+            fp.write(html_text)
+        profile['html_path'] = html_path
+        # add to map to avoid duplicate processing
+        gs_profile_map[uid] = profile
+
+        # write result to file
+        with open(gs_profiles_file, 'a', encoding='utf-8') as fp:
+            fp.write(json.dumps(profile, ensure_ascii=False))
+            fp.write('\n')
 
 
 async def gs_search_by_authors(browser: BrowserContext,
@@ -121,7 +160,7 @@ async def gs_search_by_authors(browser: BrowserContext,
             article_divs = await gs_page.locator('div.gs_r.gs_or.gs_scl').all()
             for article_div in article_divs:
                 try:
-                    article_url = await article_div.locator('h3.gs_rt a').get_attribute('href', timeout=10e3)
+                    article_url = await article_div.locator('h3.gs_rt a').get_attribute('href', timeout=1e3)
                     if article_url in processed_articles:
                         logger.info('article %s has been processed', article_url)
                         continue
