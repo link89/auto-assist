@@ -2,13 +2,14 @@ from typing import Optional, List
 from ruamel.yaml import YAML
 from playwright.async_api import async_playwright
 
+from contextlib import asynccontextmanager
 import asyncio
 import os
 import fire
-from contextlib import asynccontextmanager
+import sys
 
 from .browser import lauch_browser
-from .lib import USER_HOME
+from .lib import USER_HOME, pending
 from .tasks import google_scholar as gs
 
 
@@ -58,18 +59,34 @@ class TaskCmd:
         self._entry = entry
 
     def gs_search_by_authors(self,
-                             authors: List[str],
                              out_dir: str = './out',
                              page_limit=3,
                              google_scholar_url='https://scholar.google.com/?hl=en&as_sdt=0,5',
                              browser='default',
                              ):
+        authors = [line.strip() for line in sys.stdin]
         async def run():
-            async with self._entry.browser()._launch_async(browser) as _browser:
+            async with self._entry.browser()._launch_async(browser) as browser_ctx:
                 await gs.gs_search_by_authors(
-                    _browser, authors=authors, out_dir=out_dir, page_limit=page_limit, google_scholar_url=google_scholar_url)
-                input('Press any key to exit ...')
+                    browser_ctx, authors=authors, out_dir=out_dir, page_limit=page_limit, google_scholar_url=google_scholar_url)
+                pending()
         asyncio.run(run())
+
+    def gs_explore_profiles(self,
+                            out_dir: str = './out',
+                            level_limit=2,
+                            google_scholar_url=None,
+                            browser='default',
+                            ):
+        profile_urls = [line.strip() for line in sys.stdin]
+        async def run():
+            async with self._entry.browser()._launch_async(browser) as browser_ctx:
+                await gs.gs_explore_profiles(
+                    browser_ctx, gs_profile_urls=profile_urls, out_dir=out_dir, level_limit=level_limit, google_scholar_url=google_scholar_url,
+                )
+                pending()
+        asyncio.run(run())
+
 
     def list_gs_profile_urls(self, result_file: str):
         gs.list_gs_profile_urls(result_file)

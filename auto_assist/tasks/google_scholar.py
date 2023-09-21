@@ -1,5 +1,6 @@
 from playwright.async_api import BrowserContext, TimeoutError
 from typing import Any, List, TypedDict
+from urllib.parse import urlparse
 import os
 import json
 
@@ -25,32 +26,24 @@ class GsProfileEntry(TypedDict):
     url: str
 
 
+class GsProfileItem(TypedDict):
+    name: str
+    url: str
+    brief: str
+    cited_stats: str
+    co_authors: List['GsProfileItem']
+
+
 class GsSearchItem(TypedDict):
     url: str
     citation: Citation
     profiles: List[GsProfileEntry]
 
 
-authors = [
-    "Roberto Car",
-    "Annabella Selloni",
-    "Michele Parrinello",
-    "Nicola Marzari",
-    "Gabor Csanyi",
-    "Guilia Galli",
-    "Weinan E",
-    "Gerbrand Ceder",
-    "Jens Norskov",
-    "Michiel Sprik",
-    "Mathias Scheffler",
-    "Alan Aspuru-Guzik",
-]
-
-
 async def gs_explore_profiles(browser: BrowserContext,
                               gs_profile_urls: List[str],
                               out_dir: str = './out',
-                              level=2,
+                              level_limit=2,
                               google_scholar_url='https://scholar.google.com/',
                               ):
 
@@ -60,9 +53,8 @@ async def gs_explore_profiles(browser: BrowserContext,
 
 
 
-
 async def gs_search_by_authors(browser: BrowserContext,
-                               authors: List[str] = authors,
+                               authors: List[str],
                                out_dir: str = './out',
                                page_limit=3,
                                google_scholar_url='https://scholar.google.com/?hl=en&as_sdt=0,5',
@@ -76,7 +68,7 @@ async def gs_search_by_authors(browser: BrowserContext,
     # load existed results
     gs_search_result = []
     if os.path.exists(gs_result_file):
-        gs_search_result = load_gs_search_result(gs_result_file)
+        gs_search_result: List[GsSearchItem] = load_jsonl(gs_result_file)
 
     processed_articles = set(item['url'] for item in gs_search_result)
 
@@ -151,15 +143,19 @@ async def gs_search_by_authors(browser: BrowserContext,
 
 
 def list_gs_profile_urls(result_file: str):
-    result: List[GsSearchItem] = load_gs_search_result(result_file)
+    result: List[GsSearchItem] = load_jsonl(result_file)
     urls = set(profile['url'] for item in result for profile in item['profiles'])
     for url in urls:
         print(url)
 
 
-def load_gs_search_result(result_file: str) -> List[GsSearchItem]:
+def get_gs_profile_id(url: str):
+    return urlparse(url).params['user']
+
+
+def load_jsonl(file: str):
     result = []
-    with open(result_file, 'r', encoding='utf-8') as fp:
+    with open(file, 'r', encoding='utf-8') as fp:
         for line in fp:
             result.append(json.loads(line))
     return result

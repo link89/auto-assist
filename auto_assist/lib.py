@@ -8,3 +8,6 @@ logging.basicConfig(format='%(asctime)s %(name)s: %(message)s', level=logging.IN
 
 def get_logger(name=None):
     return logging.getLogger(name)
+
+def pending():
+    input('Press any key to exit ...')
