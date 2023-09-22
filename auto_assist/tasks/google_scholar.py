@@ -1,9 +1,8 @@
 from playwright.async_api import BrowserContext, TimeoutError
-from typing import Any, List, TypedDict, Tuple, Dict
+from typing import List, TypedDict, Tuple, Dict
 from urllib.parse import urlparse, urljoin
 import os
 import json
-import sys
 
 from auto_assist.lib import get_logger
 
@@ -80,7 +79,7 @@ async def gs_explore_profiles(browser: BrowserContext,
             co_authors = gs_profile_map[uid]['co_authors']
             queue.extend((author['url'], level+1) for author in co_authors)
             continue
-        logger.info("process profile %s", user_url)
+        logger.info("process profile %s, level %d", user_url, level)
         await gs_page.goto(urljoin(google_scholar_url, user_url))
         profile = GsProfileItem()
         profile['url'] = user_url
