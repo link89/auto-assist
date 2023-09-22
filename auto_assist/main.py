@@ -96,6 +96,9 @@ class TaskCmd:
         gs.gs_list_authors(result_file)
 
 
+    def gs_fix_profile_from_html(self, out_dir: str, suffix = None):
+        gs.gs_fix_profile_from_html(out_dir, suffix)
+
 
 if __name__ == '__main__':
     fire.Fire(Entry)

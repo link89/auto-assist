@@ -9,6 +9,7 @@ readme = "README.md"
 python = "^3.8"
 playwright = "^1.37.0"
 fire = "^0.5.0"
+beautifulsoup4 = "^4.12.2"
 
 
 [[tool.poetry.source]]

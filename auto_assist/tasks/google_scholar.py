@@ -1,8 +1,13 @@
 from playwright.async_api import BrowserContext, TimeoutError
+from bs4 import BeautifulSoup
+
 from typing import List, TypedDict, Tuple, Dict
 from urllib.parse import urlparse, urljoin
+from datetime import datetime
+
 import os
 import json
+
 
 from auto_assist.lib import get_logger
 
@@ -33,6 +38,8 @@ class GsProfileItem(TypedDict):
     brief: str
     cited_stats: str
     co_authors: List[GsProfileEntry]
+    articles: List[str]
+    tags: List[str]
     pdf_path: str
     html_path: str
 
@@ -50,10 +57,9 @@ async def gs_explore_profiles(browser: BrowserContext,
                               google_scholar_url='https://scholar.google.com/',
                               ):
 
-    os.makedirs(out_dir, exist_ok=True)
-
     gs_pdf_dir = os.path.join(out_dir, 'gs_pdfs')
     gs_html_dir = os.path.join(out_dir, 'gs_htmls')
+    os.makedirs(out_dir, exist_ok=True)
     os.makedirs(gs_pdf_dir, exist_ok=True)
     os.makedirs(gs_html_dir, exist_ok=True)
 
@@ -63,7 +69,7 @@ async def gs_explore_profiles(browser: BrowserContext,
     gs_profile_map: Dict[str, GsProfileItem] = {}
     if os.path.exists(gs_profiles_file):
         profile_list: List[GsProfileItem] = load_jsonl(gs_profiles_file)
-        gs_profile_map = { get_gs_profile_id(profile['url']): profile for profile in profile_list }
+        gs_profile_map = { gs_get_profile_id(profile['url']): profile for profile in profile_list }
 
     queue: List[Tuple[str, int]] = [ (url, 0) for url in gs_profile_urls ]
 
@@ -73,7 +79,7 @@ async def gs_explore_profiles(browser: BrowserContext,
         if level > depth_limit:
             break
 
-        uid = get_gs_profile_id(user_url)
+        uid = gs_get_profile_id(user_url)
         if uid in gs_profile_map:
             logger.info("profile %s has been processed", user_url)
             co_authors = gs_profile_map[uid]['co_authors']
@@ -222,11 +228,39 @@ def gs_list_authors(result_file: str):
     print('\n'.join(names))
 
 
-def get_gs_profile_id(url: str):
+def gs_get_profile_id(url: str):
     # parse url and get user from query string
     query = urlparse(url).query
     params = dict(kv.split('=') for kv in query.split('&'))
     return params['user']
+
+def gs_fix_profile_from_html(out_dir: str, suffix = None):
+    if suffix is None:
+        # use timestemp as suffix
+        suffix = datetime.now().strftime('%Y%m%d%H%M%S')
+
+    gs_html_dir = os.path.join(out_dir, 'gs_htmls')
+    src = os.path.join(out_dir, 'gs_profiles.jsonl')
+    dst = os.path.join(out_dir, f'gs_profiles_{suffix}.jsonl')
+
+    profiles: List[GsProfileItem] = load_jsonl(src)
+    for profile in profiles:
+        html_path = os.path.join(gs_html_dir, os.path.basename(profile['html_path']))
+        with open(html_path, 'r', encoding='utf-8') as fp:
+            soup = BeautifulSoup(fp, 'html.parser')
+        # get article from html
+        article_links = soup.select('a.gsc_a_at')
+        articles = [article_div.text for article_div in article_links]
+        profile['articles'] = articles
+        # get tags from html
+        tags_links = soup.select('a.gsc_prf_inta.gs_ibl')
+        tags = [tag_div.text for tag_div in tags_links]
+        profile['tags'] = tags
+
+    with open(dst, 'w', encoding='utf-8') as fp:
+        for profile in profiles:
+            fp.write(json.dumps(profile, ensure_ascii=False))
+            fp.write('\n')
 
 
 def load_jsonl(file: str):
