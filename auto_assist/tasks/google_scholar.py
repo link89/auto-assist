@@ -55,6 +55,7 @@ async def gs_explore_profiles(browser: BrowserContext,
                               out_dir: str = './out',
                               depth_limit = 1,
                               google_scholar_url='https://scholar.google.com/',
+                              order_by_year=True,
                               ):
 
     gs_pdf_dir = os.path.join(out_dir, 'gs_pdfs')
@@ -85,8 +86,14 @@ async def gs_explore_profiles(browser: BrowserContext,
             co_authors = gs_profile_map[uid]['co_authors']
             queue.extend((author['url'], level+1) for author in co_authors)
             continue
+
         logger.info("process profile %s, level %d", user_url, level)
-        await gs_page.goto(urljoin(google_scholar_url, user_url))
+
+        open_url = urljoin(google_scholar_url, user_url)
+        if order_by_year:
+            open_url += '&view_op=list_works&sortby=pubdate'
+        await gs_page.goto(open_url)
+
         profile = GsProfileItem()
         profile['url'] = user_url
         profile['name'] = await gs_page.locator('div#gsc_prf_in').inner_text()
@@ -104,6 +111,18 @@ async def gs_explore_profiles(browser: BrowserContext,
             url = await co_author_link.get_attribute('href')
             co_authors.append(GsProfileEntry(name=name, url=url))
             queue.append((url, level+1) )
+
+        articles = []
+        article_links = await gs_page.locator('a.gsc_a_at').all()
+        for article_link in article_links:
+            articles.append(await article_link.inner_text())
+        profile['articles'] = articles
+
+        tags = []
+        tag_links = await gs_page.locator('a.gsc_prf_inta.gs_ibl').all()
+        for tag_link in tag_links:
+            tags.append(await tag_link.inner_text())
+        profile['tags'] = tags
 
         profile['co_authors'] = co_authors
         # save pdf
