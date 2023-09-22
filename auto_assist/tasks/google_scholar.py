@@ -107,7 +107,7 @@ async def gs_explore_profiles(browser: BrowserContext,
         co_authors = []
         co_author_links = await gs_page.locator('ul.gsc_rsb_a li a').all()
         for co_author_link in co_author_links:
-            name = await co_author_link.inner_text(),
+            name = await co_author_link.inner_text()
             url = await co_author_link.get_attribute('href')
             co_authors.append(GsProfileEntry(name=name, url=url))
             queue.append((url, level+1) )
@@ -148,6 +148,7 @@ async def gs_search_by_authors(browser: BrowserContext,
                                authors: List[str],
                                out_dir: str = './out',
                                page_limit=3,
+                               keyword='',
                                google_scholar_url='https://scholar.google.com/?hl=en&as_sdt=0,5',
                                ):
     """
@@ -167,7 +168,10 @@ async def gs_search_by_authors(browser: BrowserContext,
     for author in authors:
         # search articles by auther
         await gs_page.goto(google_scholar_url)
-        await gs_page.locator('input#gs_hdr_tsi').fill(f'author:"{author}"')
+        search_input = f'author:"{author}"'
+        if keyword:
+            search_input += f' {keyword}'
+        await gs_page.locator('input#gs_hdr_tsi').fill(search_input)
         await gs_page.locator('input#gs_hdr_tsi').press('Enter')
 
         for i_page in range(page_limit):
@@ -264,6 +268,13 @@ def gs_fix_profile_from_html(out_dir: str, suffix = None):
 
     profiles: List[GsProfileItem] = load_jsonl(src)
     for profile in profiles:
+        # fix co_authors name
+        for co_author in profile['co_authors']:
+            if isinstance(co_author['name'], list):
+                co_author['name'] = co_author['name'][0]
+        continue
+
+        # fix data from html
         html_path = os.path.join(gs_html_dir, os.path.basename(profile['html_path']))
         with open(html_path, 'r', encoding='utf-8') as fp:
             soup = BeautifulSoup(fp, 'html.parser')
