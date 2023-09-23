@@ -272,8 +272,6 @@ def gs_fix_profile_from_html(out_dir: str, suffix = None):
         for co_author in profile['co_authors']:
             if isinstance(co_author['name'], list):
                 co_author['name'] = co_author['name'][0]
-        continue
-
         # fix data from html
         html_path = os.path.join(gs_html_dir, os.path.basename(profile['html_path']))
         with open(html_path, 'r', encoding='utf-8') as fp:
