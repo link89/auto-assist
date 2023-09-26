@@ -4,7 +4,7 @@ Collection of automation tools for various tasks.
 
 ## Usage
 
-### Lauch a browser interactively
+### Launch a browser
 Use this to manually setup the browser before running other tasks. For example, login to websites, etc.
 ```bash
 poetry run python -m auto_assist.main browser launch
