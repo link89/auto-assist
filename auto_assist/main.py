@@ -10,7 +10,7 @@ import sys
 
 from .browser import launch_browser
 from .lib import USER_HOME, pending
-from .tasks import google_scholar as gs
+from .domain import google_scholar as gs
 
 
 class MainCmd:
