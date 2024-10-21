@@ -11,6 +11,7 @@ playwright = "^1.37.0"
 fire = "^0.5.0"
 beautifulsoup4 = "^4.12.2"
 datapane = "^0.17.0"
+requests = "^2.32.3"
 
 
 [[tool.poetry.source]]

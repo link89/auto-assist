@@ -11,6 +11,7 @@ import sys
 from .browser import launch_browser
 from .lib import USER_HOME, pending
 from .domain import google_scholar as gs
+from .domain.hunter import ChemistryHunterCmd
 
 
 class MainCmd:
@@ -19,6 +20,9 @@ class MainCmd:
 
     def gs(self):
         return GsCmd
+
+    def ch(self):
+        return ChemistryHunterCmd
 
 
 class BrowserCmd:
