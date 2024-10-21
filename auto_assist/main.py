@@ -8,7 +8,7 @@ import os
 import fire
 import sys
 
-from .browser import lauch_browser
+from .browser import launch_browser
 from .lib import USER_HOME, pending
 from .tasks import google_scholar as gs
 
@@ -50,7 +50,7 @@ class BrowserCmd:
     async def _launch_async(self, name: str):
         config = self._entry._get_browser_config(name)
         async with async_playwright() as pw:
-            yield await lauch_browser(name, config, USER_HOME)(pw)
+            yield await launch_browser(name, config, USER_HOME)(pw)
 
 
 class TaskCmd:

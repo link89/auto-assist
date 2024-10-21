@@ -1,35 +1,40 @@
-from typing import Dict, Optional
-from playwright.async_api import Playwright, BrowserContext
+from playwright.async_api import Playwright
+import json
 import os
 
-from .lib import USER_HOME
 
-def lauch_browser(name: str = 'default',
-                  config: Optional[dict] = None,
-                  user_home: str = USER_HOME):
-    if config is None:
-        config = {}
+def launch_browser(browser_dir: str, **kwargs):
+    browser_dir = os.path.expanduser(browser_dir)
+    config_file = os.path.join(browser_dir, 'config.json')
 
-    config = {
-        'channel': 'chrome',
-        'user_data_dir': os.path.join(user_home,'user-data', name),
-        'headless': False,
-        'ignore_https_errors': True,
-        'slow_mo': 1000,
-        'ignore_default_args': [
-            '--enable-automation',
-            '--no-sandbox',
-            '--disable-extensions',
-            '--disable-background-networking',
-        ],
-        **config,
-    }
+    if os.path.exists(config_file):
+        print('loading config from {}'.format(config_file))
+        with open(config_file) as f:
+            config = json.load(f)
+    else:
+        config = {
+            'channel': 'chrome',
+            'user_data_dir': os.path.join(browser_dir,'user-data'),
+            'headless': False,
+            'ignore_https_errors': True,
+            'slow_mo': 1000,
+            'ignore_default_args': [
+                '--enable-automation',
+                '--no-sandbox',
+                '--disable-extensions',
+                '--disable-background-networking',
+            ],
+            **kwargs,
+        }
+        with open(config_file, 'w') as f:
+            json.dump(config, f, indent=2)
+        print('config saved to {}'.format(config_file))
+
+    for key in ['user_data_dir', 'downloads_path']:
+        dir_path = config.get(key)
+        if dir_path:
+            os.makedirs(dir_path, exist_ok=True)
 
     async def _launcher(pw: Playwright):
-        for key in ['user_data_dir', 'downloads_path']:
-            dir_path = config.get(key)
-            if dir_path:
-                os.makedirs(dir_path, exist_ok=True)
         return await pw.chromium.launch_persistent_context(**config)
-
     return _launcher
