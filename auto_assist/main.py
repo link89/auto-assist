@@ -17,8 +17,8 @@ class MainCmd:
     def browser(self):
         return BrowserCmd
 
-    def task(self):
-        return TaskCmd(self)
+    def gs(self):
+        return GsCmd
 
 
 class BrowserCmd:
@@ -38,7 +38,7 @@ class BrowserCmd:
             yield await launch_browser(browser_dir, **kwargs)(pw)
 
 
-class TaskCmd:
+class GsCmd:
 
     def __init__(self, browser_dir) -> None:
         self._browser_dir = browser_dir
