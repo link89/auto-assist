@@ -15,7 +15,7 @@ from .tasks import google_scholar as gs
 
 class MainCmd:
     def browser(self):
-        return BrowserCmd()
+        return BrowserCmd
 
     def task(self):
         return TaskCmd(self)
@@ -41,18 +41,18 @@ class BrowserCmd:
 class TaskCmd:
 
     def __init__(self, browser_dir) -> None:
-        pass
+        self._browser_dir = browser_dir
+
 
     def gs_search_by_authors(self,
                              out_dir: str = './out',
                              page_limit=3,
                              keyword='',
                              google_scholar_url='https://scholar.google.com/?hl=en&as_sdt=0,5',
-                             browser='default',
                              ):
         authors = [line.strip() for line in sys.stdin]
         async def run():
-            async with self._entry.browser()._launch_async(browser) as browser_ctx:
+            async with BrowserCmd()._launch_async(self._browser_dir) as browser_ctx:
                 await gs.gs_search_by_authors(
                     browser_ctx, authors=authors, out_dir=out_dir, keyword=keyword, page_limit=page_limit, google_scholar_url=google_scholar_url)
                 pending()
@@ -62,12 +62,11 @@ class TaskCmd:
                             out_dir: str = './out',
                             depth_limit=1,
                             google_scholar_url='https://scholar.google.com/',
-                            browser='default',
                             order_by_year=True,
                             ):
         profile_urls = [line.strip() for line in sys.stdin]
         async def run():
-            async with self._entry.browser()._launch_async(browser) as browser_ctx:
+            async with BrowserCmd()._launch_async(self._browser_dir) as browser_ctx:
                 await gs.gs_explore_profiles(
                     browser_ctx, gs_profile_urls=profile_urls, out_dir=out_dir, depth_limit=depth_limit, order_by_year=order_by_year, google_scholar_url=google_scholar_url,
                 )
