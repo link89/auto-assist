@@ -3,7 +3,7 @@ import json
 import os
 
 
-def launch_browser(browser_dir: str, **kwargs):
+def launch_browser(browser_dir: str, channel='chrome', **kwargs):
     browser_dir = os.path.expanduser(browser_dir)
     config_file = os.path.join(browser_dir, 'config.json')
 
@@ -13,8 +13,8 @@ def launch_browser(browser_dir: str, **kwargs):
             config = json.load(f)
     else:
         config = {
-            'channel': 'chrome',
-            'user_data_dir': os.path.join(browser_dir,'user-data'),
+            'channel': channel,
+            'user_data_dir': os.path.abspath(os.path.join(browser_dir,'user-data')),
             'headless': False,
             'ignore_https_errors': True,
             'slow_mo': 1000,
@@ -24,11 +24,13 @@ def launch_browser(browser_dir: str, **kwargs):
                 '--disable-extensions',
                 '--disable-background-networking',
             ],
-            **kwargs,
         }
-        with open(config_file, 'w') as f:
-            json.dump(config, f, indent=2)
-        print('config saved to {}'.format(config_file))
+        os.makedirs(browser_dir, exist_ok=True)
+
+    config.update(kwargs)
+    with open(config_file, 'w') as f:
+        json.dump(config, f, indent=2)
+    print('config saved to {}'.format(config_file))
 
     for key in ['user_data_dir', 'downloads_path']:
         dir_path = config.get(key)

@@ -13,50 +13,35 @@ from .lib import USER_HOME, pending
 from .tasks import google_scholar as gs
 
 
-class Entry:
-
-    def __init__(self, config_file: Optional[str] = None) -> None:
-        if config_file is None:
-            config_file = os.path.join(USER_HOME, 'config.yml')
-        if os.path.exists(config_file):
-            yaml = YAML(typ='safe')
-            with open(config_file) as f:
-                self._config = yaml.load(f)
-        else:
-            self._config = {}
-
+class MainCmd:
     def browser(self):
-        return BrowserCmd(self)
+        return BrowserCmd()
 
     def task(self):
         return TaskCmd(self)
 
-    def _get_browser_config(self, name: str):
-        return self._config.get('browsers', {}).get(name, {})
-
 
 class BrowserCmd:
 
-    def __init__(self, entry: Entry) -> None:
-        self._entry = entry
+    def __init__(self):
+        pass
 
-    def launch(self, name: str = 'default'):
+    def launch(self, browser_dir: str, **kwargs):
         async def run():
-            async with self._launch_async(name):
+            async with self._launch_async(browser_dir, **kwargs):
                 input('Press any key to exit ...')
         asyncio.run(run())
 
     @asynccontextmanager
-    async def _launch_async(self, name: str):
-        config = self._entry._get_browser_config(name)
+    async def _launch_async(self, browser_dir: str, **kwargs):
         async with async_playwright() as pw:
-            yield await launch_browser(name, config, USER_HOME)(pw)
+            yield await launch_browser(browser_dir, **kwargs)(pw)
 
 
 class TaskCmd:
 
-    def __init__(self, entry: Entry) -> None:
-        self._entry = entry
+    def __init__(self, browser_dir) -> None:
+        pass
 
     def gs_search_by_authors(self,
                              out_dir: str = './out',
@@ -103,4 +88,4 @@ class TaskCmd:
 
 
 if __name__ == '__main__':
-    fire.Fire(Entry)
+    fire.Fire(MainCmd)
