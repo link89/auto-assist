@@ -94,13 +94,13 @@ async def gs_explore_profiles(browser: BrowserContext,
             open_url += '&view_op=list_works&sortby=pubdate'
         await gs_page.goto(open_url)
 
-        profile = GsProfileItem()
+        profile = GsProfileItem()  # type: ignore
         profile['url'] = user_url
         profile['name'] = await gs_page.locator('div#gsc_prf_in').inner_text()
         profile['brief'] = await gs_page.locator('div#gsc_prf_w').inner_text()
         profile['cited_stats'] = await gs_page.locator('table#gsc_rsb_st').inner_text()
         try:
-            profile['homepage'] = await gs_page.locator('a.gsc_prf_ila').get_by_text("Homepage").get_attribute('href', timeout=1e3)
+            profile['homepage'] = await gs_page.locator('a.gsc_prf_ila').get_by_text("Homepage").get_attribute('href', timeout=1e3)  # type: ignore
         except TimeoutError:
             profile['homepage'] = ''
 
@@ -109,8 +109,8 @@ async def gs_explore_profiles(browser: BrowserContext,
         for co_author_link in co_author_links:
             name = await co_author_link.inner_text()
             url = await co_author_link.get_attribute('href')
-            co_authors.append(GsProfileEntry(name=name, url=url))
-            queue.append((url, level+1) )
+            co_authors.append(GsProfileEntry(name=name, url=url)) # type: ignore
+            queue.append((url, level+1))  # type: ignore
 
         articles = []
         article_links = await gs_page.locator('a.gsc_a_at').all()
@@ -213,14 +213,14 @@ async def gs_search_by_authors(browser: BrowserContext,
                     profile_links = await article_div.locator('div.gs_a a').all()
                     gs_profiles = []
                     for profile_link in profile_links:
-                        gs_profile = GsProfileEntry()
+                        gs_profile = GsProfileEntry()  # type: ignore
                         gs_profile['name'] = await profile_link.inner_text()
-                        gs_profile['url'] = await profile_link.get_attribute('href')
+                        gs_profile['url'] = await profile_link.get_attribute('href')  # type: ignore
                         logger.info('gs_profile: %s', gs_profile)
                         gs_profiles.append(gs_profile)
 
                     gs_search_item = GsSearchItem(
-                        url=article_url,
+                        url=article_url,  # type: ignore
                         citation=citation,
                         profiles=gs_profiles,
                     )
@@ -231,7 +231,7 @@ async def gs_search_by_authors(browser: BrowserContext,
                         fp.write(json.dumps(gs_search_item, ensure_ascii=False))
                         fp.write('\n')
 
-                    processed_articles.add(article_url)
+                    processed_articles.add(article_url)  # type: ignore
 
                 except TimeoutError as e:
                     logger.exception("unexpected error occured")
@@ -320,7 +320,7 @@ def parse_endnote(text: str):
     %I ACS Publications
     """
 
-    citation = Citation()
+    citation = Citation()  # type: ignore
     citation['authors'] = []
     for line in text.splitlines():
         if line.startswith('%'):
