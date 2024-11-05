@@ -1,9 +1,13 @@
+from typing import List
+from playwright.async_api import async_playwright
 from bs4 import BeautifulSoup
 import subprocess as sp
 import requests
+import asyncio
 import os
 
 from auto_assist.lib import url_to_filename, expand_globs
+from auto_assist.browser import launch_browser
 
 
 
@@ -11,7 +15,7 @@ class ChemistryHunterCmd:
 
     def __init__(self,
                  pandoc_cmd='pandoc',
-                 pandoc_opt='-f html -t markdown_strict-raw_html',
+                 pandoc_opt='-f html -t gfm-raw_html',
                  browser_dir=None,
                  proxy=None):
         """
@@ -28,23 +32,17 @@ class ChemistryHunterCmd:
         self._browser_dir = browser_dir
 
     def scrape_urls(self, urls_file: str, out_dir: str):
-        os.makedirs(out_dir, exist_ok=True)
-        with open(urls_file) as f:
-            for url in f:
-                url = url.strip()
-                if not url:
-                    continue
-                filename = url_to_filename(url)
-                out_file = os.path.join(out_dir, filename)
-                if os.path.exists(out_file):
-                    print(f'skip {url} as {out_file} already exists')
-                    continue
-                print(f'scraping {url}')
-                resp = self._requests_get(url)
-                resp.raise_for_status()
-                with open(out_file, 'w', encoding='utf-8') as f:
-                    f.write(resp.text)
+        """
+        Scrape urls to html files
 
+        :param urls_file: str
+            The file containing urls to scrape, one url per line
+        :param out_dir: str
+            The output directory
+        """
+        os.makedirs(out_dir, exist_ok=True)
+        urls = list(_get_urls(urls_file))
+        asyncio.run(self._async_scrape_urls(urls, out_dir))
 
     def convert_html_to_md(self, *html_files: str, out_dir: str):
         """
@@ -64,7 +62,7 @@ class ChemistryHunterCmd:
 
     def clean_html(self, *html_files: str, out_dir = None):
         """
-        Clean html files
+        Clean html files to reduce size
 
         :param html_files: list of str
             The html files to clean
@@ -90,8 +88,14 @@ class ChemistryHunterCmd:
             with open(out_file, 'w', encoding='utf-8') as f:
                 f.write(str(soup))
 
-    def retrive_briefs(self, in_files, out_dir):
-        ...
+    def retrive_faculty_members(self, urls_file, out_dir):
+        os.makedirs(out_dir, exist_ok=True)
+        urls = list(_get_urls(urls_file))
+
+        for url in urls:
+            filename = url_to_filename(url)
+            md_file = os.path.join(out_dir, filename + '.md')
+
 
     def google_cv(self, input_files, out_dir):
         ...
@@ -116,3 +120,57 @@ class ChemistryHunterCmd:
             proxies = None
         return requests.get(url, proxies=proxies, headers={'User-Agent': user_agent})
 
+    async def _async_scrape_urls(self, urls: List[str], out_dir: str):
+        async with async_playwright() as pw:
+            assert isinstance(self._browser_dir, str)
+            browser = await launch_browser(self._browser_dir)(pw)
+            page = browser.pages[0]
+            # abort images, fonts, css and other media files
+            await page.route('**/*.{png,jpg,jpeg,webp,css,woff,woff2,ttf,svg}', lambda route: route.abort())
+            for url in urls:
+                filename = url_to_filename(url)
+                out_file = os.path.join(out_dir, filename)
+                if os.path.exists(out_file):
+                    print(f'skip {url} as {out_file} already exists')
+                    continue
+                print(f'scraping {url}')
+                await page.goto(url)
+                await page.wait_for_load_state('domcontentloaded')
+                await asyncio.sleep(1)
+                with open(out_file, 'w', encoding='utf-8') as f:
+                    f.write(await page.content())
+
+def _get_urls(file):
+    with open(file) as f:
+        for line in f:
+            line = line.strip()
+            if line:
+                yield line
+
+
+retrive_faculty_member_prompt = """
+Your job is to retrive information of faculty members from a markdown file.
+The markdown file will contain multiple faculty members.
+
+A faculty member object can be defined as the following TypeScript interface:
+
+```typescript
+interface FaucultyMember {
+    name: string;
+    title?: string;  // the title of the faculty member, e.g. Professor, Associate Professor, Prof, Enginner, etc.
+    email?: string;
+    institution?: string;  // the institution the faculty member belongs to
+    department?: string;  // the department the faculty member belongs to
+    introduction?: string;  // the introduction of the faculty member
+    profile_url?: string; // the url to the detailed profile of the faculty member
+    urls?: string[];  // other urls related to the faculty member
+}
+```
+
+You must serialize every racultyMember object you find in the markdown file to a single line of json object, aka jsonl format,
+and put them in a json block, for example:
+```json
+{"name": "Alice", "title": "Associate Professor", "profile_url": "https://example.org/alice", "email": "alice@example.org", "institution": "Example University", "department": "Computer Science"}
+{"name": "Bob", "title": "Professor", "profile_url": "https://example.org/bob"}
+```
+""".strip()
