@@ -1,15 +1,17 @@
 from bs4 import BeautifulSoup
+import subprocess as sp
 import requests
 import os
 
-from auto_assist.lib import url_to_filename
+from auto_assist.lib import url_to_filename, expand_globs
+
 
 
 class ChemistryHunterCmd:
 
     def __init__(self,
                  pandoc_cmd='pandoc',
-                 pandoc_opt='-f html-native_divs-native_spans -t markdown',
+                 pandoc_opt='-f html -t markdown_strict-raw_html',
                  browser_dir=None,
                  proxy=None):
         """
@@ -35,18 +37,60 @@ class ChemistryHunterCmd:
                 filename = url_to_filename(url)
                 out_file = os.path.join(out_dir, filename)
                 if os.path.exists(out_file):
-                    print('skip {} as file {} exist'.format(url, out_file))
+                    print(f'skip {url} as {out_file} already exists')
                     continue
-                print('scraping {}'.format(url))
+                print(f'scraping {url}')
                 resp = self._requests_get(url)
                 resp.raise_for_status()
                 with open(out_file, 'w', encoding='utf-8') as f:
                     f.write(resp.text)
 
-    def convert_html_to_md(self, input_htmls, out_dir):
-        ...
 
-    def retrive_briefs(self, input_files, out_dir):
+    def convert_html_to_md(self, *html_files: str, out_dir: str):
+        """
+        Convert html files to markdown files with pandoc
+
+        :param html_files: list of str
+            The html files to convert
+        :param out_dir: str
+        """
+        in_files = expand_globs(html_files)
+        os.makedirs(out_dir, exist_ok=True)
+        for in_file in in_files:
+            filename = os.path.basename(in_file)
+            out_file = os.path.join(out_dir, filename + '.md')
+            print(f'converting {in_file} to {out_file}')
+            sp.check_call(f'{self._pancdo_cmd} {self._pandoc_opt} {in_file} -o {out_file}', shell=True)
+
+    def clean_html(self, *html_files: str, out_dir = None):
+        """
+        Clean html files
+
+        :param html_files: list of str
+            The html files to clean
+        :param out_dir: st
+            The output directory, if None, will overwrite the input files
+        """
+        if out_dir is not None:
+            os.makedirs(out_dir, exist_ok=True)
+        in_files = expand_globs(html_files)
+        for in_file in in_files:
+            filename = os.path.basename(in_file)
+            out_file = os.path.join(out_dir, filename) if out_dir else in_file
+            print(f'cleaning {in_file} to {out_file}')
+            with open(in_file, encoding='utf-8') as f:
+                soup = BeautifulSoup(f, 'html.parser')
+                # remove base64 images
+                for img in soup.find_all('img'):
+                    if img.get('src', '').startswith('data:image'):
+                        img.decompose()
+                # remove svg images
+                for svg in soup.find_all('svg'):
+                    svg.decompose()
+            with open(out_file, 'w', encoding='utf-8') as f:
+                f.write(str(soup))
+
+    def retrive_briefs(self, in_files, out_dir):
         ...
 
     def google_cv(self, input_files, out_dir):
