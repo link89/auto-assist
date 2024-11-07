@@ -5,11 +5,14 @@ from typing import List, TypedDict, Tuple, Dict
 from urllib.parse import urlparse, urljoin
 from datetime import datetime
 
-import os
+import asyncio
 import json
+import sys
+import os
 
 
-from auto_assist.lib import get_logger
+from auto_assist.lib import get_logger, pending
+from auto_assist.browser import BrowserCmd
 
 logger = get_logger(__name__)
 
@@ -344,3 +347,50 @@ def parse_endnote(text: str):
             elif key == 'I':
                 citation['publisher'] = value
     return citation
+
+
+class GsCmd:
+
+    def __init__(self, browser_dir) -> None:
+        self._browser_dir = browser_dir
+
+    def gs_search_by_authors(self,
+                             out_dir: str = './out',
+                             page_limit=3,
+                             keyword='',
+                             google_scholar_url='https://scholar.google.com/?hl=en&as_sdt=0,5',
+                             ):
+        authors = [line.strip() for line in sys.stdin]
+        async def run():
+            async with BrowserCmd()._launch_async(self._browser_dir) as browser_ctx:
+                await gs_search_by_authors(
+                    browser_ctx, authors=authors, out_dir=out_dir, keyword=keyword, page_limit=page_limit, google_scholar_url=google_scholar_url)
+                pending()
+        asyncio.run(run())
+
+    def gs_explore_profiles(self,
+                            out_dir: str = './out',
+                            depth_limit=1,
+                            google_scholar_url='https://scholar.google.com/',
+                            order_by_year=True,
+                            ):
+        profile_urls = [line.strip() for line in sys.stdin]
+        async def run():
+            async with BrowserCmd()._launch_async(self._browser_dir) as browser_ctx:
+                await gs_explore_profiles(
+                    browser_ctx, gs_profile_urls=profile_urls, out_dir=out_dir, depth_limit=depth_limit, order_by_year=order_by_year, google_scholar_url=google_scholar_url,
+                )
+                pending()
+        asyncio.run(run())
+
+
+    def gs_list_profile_urls(self, result_file: str):
+        gs_list_profile_urls(result_file)
+
+
+    def gs_list_authors(self, result_file: str):
+        gs_list_authors(result_file)
+
+
+    def gs_fix_profile_from_html(self, out_dir: str, suffix = None):
+        gs_fix_profile_from_html(out_dir, suffix)

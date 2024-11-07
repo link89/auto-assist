@@ -1,4 +1,8 @@
 from playwright.async_api import Playwright
+from playwright.async_api import async_playwright
+from contextlib import asynccontextmanager
+
+import asyncio
 import json
 import os
 
@@ -40,3 +44,20 @@ def launch_browser(browser_dir: str, channel='chrome', **kwargs):
     async def _launcher(pw: Playwright):
         return await pw.chromium.launch_persistent_context(**config)
     return _launcher
+
+
+class BrowserCmd:
+
+    def __init__(self):
+        pass
+
+    def launch(self, browser_dir: str, **kwargs):
+        async def run():
+            async with self._launch_async(browser_dir, **kwargs):
+                input('Press any key to exit ...')
+        asyncio.run(run())
+
+    @asynccontextmanager
+    async def _launch_async(self, browser_dir: str, **kwargs):
+        async with async_playwright() as pw:
+            yield await launch_browser(browser_dir, **kwargs)(pw)
