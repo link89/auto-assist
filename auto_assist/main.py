@@ -1,12 +1,7 @@
-from typing import Optional, List
-from ruamel.yaml import YAML
-import asyncio
 import fire
-import sys
 
 from .browser import BrowserCmd
-from .lib import USER_HOME, pending
-from .domain import google_scholar as gs
+from .domain.google_scholar import GsCmd
 from .domain.hunter import ChemistryHunterCmd
 
 
@@ -19,7 +14,6 @@ class MainCmd:
 
     def ch(self):
         return ChemistryHunterCmd
-
 
 
 if __name__ == '__main__':
