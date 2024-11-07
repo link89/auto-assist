@@ -11,7 +11,7 @@ from auto_assist.browser import launch_browser
 
 
 
-class ChemistryHunterCmd:
+class HunterCmd:
 
     def __init__(self,
                  pandoc_cmd='pandoc',

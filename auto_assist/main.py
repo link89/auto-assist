@@ -1,19 +1,23 @@
 import fire
 
+from .config import ConfigCmd
 from .browser import BrowserCmd
 from .domain.google_scholar import GsCmd
-from .domain.hunter import ChemistryHunterCmd
+from .domain.hunter import HunterCmd
 
 
 class MainCmd:
+    def config(self):
+        return ConfigCmd
+
     def browser(self):
         return BrowserCmd
 
     def gs(self):
         return GsCmd
 
-    def ch(self):
-        return ChemistryHunterCmd
+    def hunter(self):
+        return HunterCmd
 
 
 if __name__ == '__main__':
