@@ -1,7 +1,9 @@
-from typing import List
 from playwright.async_api import async_playwright
 from bs4 import BeautifulSoup
 from openai import OpenAI
+from pydantic import BaseModel
+
+from typing import List, Optional
 import subprocess as sp
 import requests
 import asyncio
@@ -103,6 +105,7 @@ class HunterCmd:
         :param out_dir: str
             The output directory
         """
+
         os.makedirs(out_dir, exist_ok=True)
         openai_client = self._get_open_ai_client()
         for md_file in md_files:
@@ -112,31 +115,20 @@ class HunterCmd:
                 continue
             with open(md_file, encoding='utf-8') as f:
                 md_text = f.read()
-            res = self._get_open_ai_response(openai_client,
-                                             prompt=prompt.RETRIVE_FACULTY_MEBERS,
-                                             text=md_text)
-            with open(data_file, 'w', encoding='utf-8') as f:
-                json.dump(res.model_dump(), f)
+            try:
+                res = self._get_open_ai_response(openai_client,
+                                                 prompt=prompt.RETRIVE_FACULTY_MEBERS,
+                                                 text=md_text)
+                raw_data = next(get_md_code_block(res.choices[0].message.content, '```json'))
+                lines = []
+                for line in raw_data.splitlines():
+                    line = self._ensure_valid_json(openai_client, line, FacultyMember)
+                    lines.append(line)
+                with open(data_file, 'w', encoding='utf-8') as f:
+                    f.write('\n'.join(lines))
+            except Exception as e:
+                logger.exception(f'fail to retrive faculty members from {md_file}')
 
-    def _get_open_ai_response(self, client: OpenAI, prompt, text):
-        messages = [
-            {'role': 'system', 'content': prompt},
-            {'role': 'user', 'content': text},
-        ]
-        res = client.chat.completions.create(
-            model='deepseek-chat',
-            messages=messages,  # type: ignore
-            stream=False,
-            max_tokens=100_000,
-        )
-        # save response to log as jsonl
-        with open(self._openai_log, 'a', encoding='utf-8') as f:
-            log = {
-                'req': messages,
-                'res': res.model_dump(),
-            }
-            json.dump(log, f)
-        return res
 
     def google_cv(self, input_files, out_dir):
         ...
@@ -187,6 +179,53 @@ class HunterCmd:
         client = OpenAI(base_url=base_url, api_key=api_key)
         return client
 
+    def _get_open_ai_response(self, client: OpenAI, prompt, text):
+        messages = [
+            {'role': 'system', 'content': prompt},
+            {'role': 'user', 'content': text},
+        ]
+        res = client.chat.completions.create(
+            model='deepseek-chat',
+            messages=messages,  # type: ignore
+            stream=False,
+            max_tokens=100_000,
+        )
+        # save response to log as jsonl
+        with open(self._openai_log, 'a', encoding='utf-8') as f:
+            log = {
+                'req': messages,
+                'res': res.model_dump(),
+            }
+            json.dump(log, f)
+        return res
+
+    def _ensure_valid_json(self, client:OpenAI, text: str, pydantic_model, max_treis=3):
+        origin_text = text
+        for _ in range(max_treis):
+            try:
+                obj = json.loads(text)
+                pydantic_model.parse_obj(obj)
+                return json.dumps(obj)
+            except Exception as e:
+                logger.error(f'invalid json: {origin_text}, try to fix: {e}')
+                # always use the original text to fix
+                res = self._get_open_ai_response(client, prompt.FIX_FACULTY_JSON, origin_text)
+                text = next(get_md_code_block(res.choices[0].message.content, '```json'))
+        logger.error(f'Can not fix the json string: {origin_text}')
+        raise ValueError('Fail to fix broken json string')
+
+
+class FacultyMember(BaseModel):
+    name: str
+    title: str = ''
+    email: str = ''
+    institue: str = ''
+    department: str = ''
+    introduction: str = ''
+    profile_url: str = ''
+    avarar_url: str = ''
+    urls: List[str] = []
+
 
 def _get_urls(file):
     with open(file) as f:
@@ -196,5 +235,3 @@ def _get_urls(file):
                 yield line
 
 
-def _parse_faculty_members(data):
-    ...
