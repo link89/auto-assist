@@ -1,21 +1,27 @@
 from typing import List
 from playwright.async_api import async_playwright
 from bs4 import BeautifulSoup
+from openai import OpenAI
 import subprocess as sp
 import requests
 import asyncio
+import json
 import os
 
-from auto_assist.lib import url_to_filename, expand_globs
+from auto_assist.lib import url_to_filename, expand_globs, get_logger, get_md_code_block
 from auto_assist.browser import launch_browser
+from auto_assist import config
 
+from . import prompt
 
+logger = get_logger(__name__)
 
 class HunterCmd:
 
     def __init__(self,
                  pandoc_cmd='pandoc',
                  pandoc_opt='-f html -t gfm-raw_html',
+                 openai_log='./openai-log.jsonl',
                  browser_dir=None,
                  proxy=None):
         """
@@ -30,6 +36,7 @@ class HunterCmd:
         self._pandoc_opt = pandoc_opt
         self._proxy = proxy
         self._browser_dir = browser_dir
+        self._openai_log = openai_log
 
     def scrape_urls(self, urls_file: str, out_dir: str):
         """
@@ -57,7 +64,7 @@ class HunterCmd:
         for in_file in in_files:
             filename = os.path.basename(in_file)
             out_file = os.path.join(out_dir, filename + '.md')
-            print(f'converting {in_file} to {out_file}')
+            logger.info(f'converting {in_file} to {out_file}')
             sp.check_call(f'{self._pancdo_cmd} {self._pandoc_opt} {in_file} -o {out_file}', shell=True)
 
     def clean_html(self, *html_files: str, out_dir = None):
@@ -75,7 +82,7 @@ class HunterCmd:
         for in_file in in_files:
             filename = os.path.basename(in_file)
             out_file = os.path.join(out_dir, filename) if out_dir else in_file
-            print(f'cleaning {in_file} to {out_file}')
+            logger.info(f'cleaning {in_file} to {out_file}')
             with open(in_file, encoding='utf-8') as f:
                 soup = BeautifulSoup(f, 'html.parser')
                 # remove base64 images
@@ -88,14 +95,48 @@ class HunterCmd:
             with open(out_file, 'w', encoding='utf-8') as f:
                 f.write(str(soup))
 
-    def retrive_faculty_members(self, urls_file, out_dir):
+    def retrive_faculty_members(self, *md_files, out_dir):
+        """
+        Retrive faculty members from markdown files
+        :param md_files: list of str
+            The markdown files to retrive faculty members
+        :param out_dir: str
+            The output directory
+        """
         os.makedirs(out_dir, exist_ok=True)
-        urls = list(_get_urls(urls_file))
+        openai_client = self._get_open_ai_client()
+        for md_file in md_files:
+            data_file = os.path.join(md_file + '.json')
+            if os.path.exists(data_file):
+                logger.info(f'{data_file} already exists, skip')
+                continue
+            with open(md_file, encoding='utf-8') as f:
+                md_text = f.read()
+            res = self._get_open_ai_response(openai_client,
+                                             prompt=prompt.RETRIVE_FACULTY_MEBERS,
+                                             text=md_text)
+            with open(data_file, 'w', encoding='utf-8') as f:
+                json.dump(res.model_dump(), f)
 
-        for url in urls:
-            filename = url_to_filename(url)
-            md_file = os.path.join(out_dir, filename + '.md')
-
+    def _get_open_ai_response(self, client: OpenAI, prompt, text):
+        messages = [
+            {'role': 'system', 'content': prompt},
+            {'role': 'user', 'content': text},
+        ]
+        res = client.chat.completions.create(
+            model='deepseek-chat',
+            messages=messages,  # type: ignore
+            stream=False,
+            max_tokens=100_000,
+        )
+        # save response to log as jsonl
+        with open(self._openai_log, 'a', encoding='utf-8') as f:
+            log = {
+                'req': messages,
+                'res': res.model_dump(),
+            }
+            json.dump(log, f)
+        return res
 
     def google_cv(self, input_files, out_dir):
         ...
@@ -131,14 +172,21 @@ class HunterCmd:
                 filename = url_to_filename(url)
                 out_file = os.path.join(out_dir, filename)
                 if os.path.exists(out_file):
-                    print(f'skip {url} as {out_file} already exists')
+                    logger.info(f'skip {url} as {out_file} already exists')
                     continue
-                print(f'scraping {url}')
+                logger.info(f'scraping {url}')
                 await page.goto(url)
                 await page.wait_for_load_state('domcontentloaded')
                 await asyncio.sleep(1)
                 with open(out_file, 'w', encoding='utf-8') as f:
                     f.write(await page.content())
+
+    def _get_open_ai_client(self):
+        base_url = config.get('openai_base_url')
+        api_key = config.get('openai_api_key')
+        client = OpenAI(base_url=base_url, api_key=api_key)
+        return client
+
 
 def _get_urls(file):
     with open(file) as f:
@@ -147,3 +195,6 @@ def _get_urls(file):
             if line:
                 yield line
 
+
+def _parse_faculty_members(data):
+    ...

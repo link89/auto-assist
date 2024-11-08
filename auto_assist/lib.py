@@ -68,3 +68,27 @@ def expand_globs(patterns: Iterable[str], raise_invalid=False) -> List[str]:
             else:
                 print(f'path {p} already exists in the list')
     return paths
+
+
+def get_md_code_block(md_text: str, start: str, end: str='```'):
+    """
+    Get the code block from markdown text by yieling the code block text
+
+    :param md_text: str
+        The markdown text
+    :param code_block_start: str
+        The start of code block, e.g. '```json'
+    :param code_block_end: str
+        The end of code block, e.g. '```'
+    """
+    while True:
+        start_idx = md_text.find(start)
+        if start_idx == -1:
+            break
+        # find the end of code block
+        end_idx = md_text.find(end, start_idx)
+        if end_idx == -1:
+            break
+        yield md_text[start_idx:end_idx + len(end)]
+        # remove the code block from the text
+        md_text = md_text[end_idx + len(end):]
