@@ -7,7 +7,7 @@ import os
 import re
 
 
-USER_HOME = os.path.join(os.path.expanduser("~"), '.auto-assist')
+USER_HOME = os.path.join(os.path.expanduser("~"))
 
 # format to include timestamp and module
 logging.basicConfig(format='%(asctime)s %(name)s: %(message)s', level=logging.INFO)
@@ -86,9 +86,10 @@ def get_md_code_block(md_text: str, start: str, end: str='```'):
         if start_idx == -1:
             break
         # find the end of code block
+        md_text = md_text[start_idx + len(start):]
         end_idx = md_text.find(end, start_idx)
         if end_idx == -1:
             break
-        yield md_text[start_idx:end_idx + len(end)]
+        yield md_text[:end_idx]
         # remove the code block from the text
         md_text = md_text[end_idx + len(end):]
