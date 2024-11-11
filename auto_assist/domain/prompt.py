@@ -4,9 +4,7 @@ interface FaucultyMember {
     name: string;
     title?: string;  // the title of the faculty member, e.g. Professor, Associate Professor, Prof, Enginner, etc.
     email?: string;
-    institue?: string;  // the name of institue the faculty member belongs to
-    department?: string;  // the department the faculty member belongs to
-    introduction?: string;  // the introduction of the faculty member
+    introduction?: string;  // the introduction of the faculty member, e.g. research interests, experience, etc.
     profile_url?: string; // the url to the detailed profile of the faculty member
 }
 ```
@@ -24,7 +22,7 @@ FACULTY_OBJECT_SCHEMA
 You must serialize every racultyMember object you find in the markdown file to a single line of json object, aka jsonl format,
 and put them in a json block, for example:
 ```json
-{"name": "Alice", "title": "Associate Professor", "profile_url": "https://example.org/alice", "email": "alice@example.org", "department": "Computer Science"}
+{"name": "Alice", "title": "Associate Professor", "profile_url": "https://example.org/alice", "email": "alice@example.org", "introduction": "research interests include AI, machine learning, etc."}
 {"name": "Bob", "title": "Professor", "profile_url": "https://example.org/bob"}
 ```
 Note that the data in example above is not real, you should replace them with the real data you find.
@@ -42,7 +40,7 @@ You need to fix it according to the interface above, and generate a new json str
 
 For example:
 ```json
-{"name": "Alice", "title": "Associate Professor", "profile_url": "https://example.org/alice", "email": "alice@example.org", "department": "Computer Science"}
+{"name": "Alice", "title": "Associate Professor", "profile_url": "https://example.org/alice", "email": "alice@example.org"}
 ```
 
 Note that the data in example above is not real, you should replace them with the real data you find.

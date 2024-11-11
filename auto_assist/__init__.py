@@ -22,7 +22,3 @@ class MainCmd:
 
 def main():
     fire.Fire(MainCmd)
-
-
-if __name__ == '__main__':
-    main()

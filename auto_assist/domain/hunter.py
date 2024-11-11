@@ -118,7 +118,8 @@ class HunterCmd:
                 res = self._get_open_ai_response(openai_client,
                                                  prompt=prompt.RETRIVE_FACULTY_MEBERS,
                                                  text=md_text)
-                data = next(get_md_code_block(res.choices[0].message.content, '```json')).strip()
+                answer = res.choices[0].message.content
+                data = next(get_md_code_block(answer, '```json')).strip()
                 with open(data_file, 'w', encoding='utf-8') as f:
                     f.write(data)
             except Exception as e:
@@ -189,31 +190,18 @@ class HunterCmd:
             json.dump(res.model_dump(), f)
         return res
 
-    def _ensure_valid_json(self, client:OpenAI, text: str, pydantic_model, max_treis=3):
-        origin_text = text
-        for _ in range(max_treis):
-            try:
-                obj = json.loads(text)
-                pydantic_model.parse_obj(obj)
-                return json.dumps(obj)
-            except Exception as e:
-                logger.error(f'invalid json: {origin_text}, try to fix: {e}')
-                # always use the original text to fix
-                res = self._get_open_ai_response(client, prompt.FIX_FACULTY_JSON, origin_text)
-                text = next(get_md_code_block(res.choices[0].message.content, '```json')).strip()
-        logger.error(f'Can not fix the json string: {origin_text}')
-        raise ValueError('Fail to fix broken json string')
+    def _load_context(self, excel_file):
+        import pandas as pd
+        with open(excel_file, 'rb') as f:
+            return pd.read_excel(f)
 
 
 class FacultyMember(BaseModel):
     name: str
     title: str = ''
     email: str = ''
-    institue: str = ''
-    department: str = ''
     introduction: str = ''
     profile_url: str = ''
-    avarar_url: str = ''
 
 
 def _get_urls(file):
