@@ -2,15 +2,18 @@ from playwright.async_api import async_playwright
 from bs4 import BeautifulSoup
 from openai import OpenAI
 from pydantic import BaseModel
-
 from typing import List
+
+import pandas as pd
 import subprocess as sp
 import requests
 import asyncio
 import json
 import os
 
-from auto_assist.lib import url_to_filename, expand_globs, get_logger, get_md_code_block
+from auto_assist.lib import (
+    url_to_filename, expand_globs, get_logger,
+    get_md_code_block, jsonl_load, jsonl_dump, dict_ignore_none)
 from auto_assist.browser import launch_browser
 from auto_assist import config
 
@@ -40,17 +43,21 @@ class HunterCmd:
         self._browser_dir = browser_dir
         self._openai_log = openai_log
 
-    def scrape_urls(self, urls_file: str, out_dir: str):
+    def scrape_urls(self, excel_file: str, out_dir: str, col_name='FacultyPage'):
         """
         Scrape urls to html files
 
-        :param urls_file: str
-            The file containing urls to scrape, one url per line
+        :param excel_file: str
+            The excel file that contains urls
         :param out_dir: str
             The output directory
+        :param col_name: str
+            The column name that contains urls
         """
         os.makedirs(out_dir, exist_ok=True)
-        urls = list(_get_urls(urls_file))
+        with open(excel_file, 'rb') as f:
+            df = pd.read_excel(f)
+        urls = list(df[col_name])
         asyncio.run(self._async_scrape_urls(urls, out_dir))
 
     def convert_html_to_md(self, *html_files: str, out_dir: str):
@@ -125,6 +132,51 @@ class HunterCmd:
             except Exception as e:
                 logger.exception(f'fail to retrive faculty members from {md_file}')
 
+    def filter_candidates(self, *jsonl_files, out_file, excel_file, col_name='FacultyPage'):
+        """
+        filter candidates from jsonl files
+
+        :param jsonl_files: list of str
+            The jsonl files that contains faculty members
+        :param out_file: str
+            The output file to save the candidates
+        :param excel_file: str
+            The excel file that contains urls
+        :param col_name: str
+            The column name that contains urls
+        """
+        with open(excel_file, 'rb') as f:
+            df = pd.read_excel(f)
+        candidates = []
+        for jsonl_file in expand_globs(jsonl_files):
+            with open(jsonl_file, 'r', encoding='utf-8') as fp:
+                basename = os.path.basename(jsonl_file)
+                row = df[df[col_name].apply(
+                    lambda x: isinstance(x, str) and basename.startswith(url_to_filename(x))
+                )]
+                for data in jsonl_load(fp):
+                    data = dict_ignore_none(data)
+                    faculty = FacultyMember(**data)
+                    if not row.empty:
+                        faculty.institute = row['Institute'].values[0]
+                        faculty.department = row['Department'].values[0]
+                        if not faculty.profile_url.startswith('http'):
+                            base_url: str = row[col_name].values[0]
+                            # remove query string from base url
+                            base_url = base_url.split('?', maxsplit=1)[0]
+                            if faculty.profile_url.startswith('/'):
+                                # remove path from base url
+                                base_url = base_url[:8] + base_url[8:].split('/', maxsplit=1)[0]
+                            faculty.profile_url = base_url + faculty.profile_url
+                    title = faculty.title.lower()
+                    if not title:
+                        logger.warning(f'title is empty for {faculty.name} in {jsonl_file}')
+                    if 'assist' in title and 'prof' in title:
+                        candidates.append(faculty.model_dump())
+
+        df = pd.DataFrame(candidates)
+        with open(out_file, 'wb') as f:
+            df.to_excel(f, index=False)
 
     def google_cv(self, input_files, out_dir):
         ...
@@ -201,14 +253,6 @@ class FacultyMember(BaseModel):
     title: str = ''
     email: str = ''
     introduction: str = ''
+    institute: str = ''
+    department: str = ''
     profile_url: str = ''
-
-
-def _get_urls(file):
-    with open(file) as f:
-        for line in f:
-            line = line.strip()
-            if line:
-                yield line
-
-

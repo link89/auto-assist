@@ -3,6 +3,7 @@ from typing import Iterable, List
 
 import logging
 import glob
+import json
 import os
 import re
 
@@ -93,3 +94,16 @@ def get_md_code_block(md_text: str, start: str, end: str='```'):
         yield md_text[:end_idx]
         # remove the code block from the text
         md_text = md_text[end_idx + len(end):]
+
+
+def jsonl_load(fp):
+    for l in fp:
+        yield json.loads(l)
+
+def jsonl_dump(fp, data):
+    lines = [json.dumps(d) for d in data]
+    fp.write('\n'.join(lines))
+
+
+def dict_ignore_none(d):
+    return {k: v for k, v in d.items() if v is not None}
