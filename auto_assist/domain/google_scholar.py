@@ -82,7 +82,6 @@ async def gs_explore_profiles(browser: BrowserContext,
         user_url, level = queue.pop(0)
         if level > depth_limit:
             break
-
         uid = gs_get_profile_id(user_url)
         if uid in gs_profile_map:
             logger.info("profile %s has been processed", user_url)

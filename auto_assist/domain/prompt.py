@@ -1,48 +1,65 @@
-FACULTY_OBJECT_SCHEMA = """
-```typescript
-interface FaucultyMember {
-    name: string;
-    title?: string;  // the title of the faculty member, e.g. Professor, Associate Professor, Prof, Enginner, etc.
-    email?: string;
-    introduction?: string;  // the introduction of the faculty member, e.g. research interests, experience, etc.
-    profile_url?: string; // the url to the detailed profile of the faculty member
-}
-```
-""".strip()
-
-
-RETRIVE_FACULTY_MEBERS = """
+RETRIVE_FACULTY_MEMBERS = """
 Your job is to retrive information of faculty members from a markdown file.
 The markdown file will contain multiple faculty members.
 
 A faculty member object can be defined as the following TypeScript interface:
 
-FACULTY_OBJECT_SCHEMA
+```typescript
+interface FaucultyMember {
+    name: string;
+    title?: string;  // the title of the faculty member, e.g. Professor, Associate Professor, Prof, Enginner, etc.
+    profile_url?: string; // the url to the detailed profile of the faculty member
+}
+```
 
 You must serialize every racultyMember object you find in the markdown file to a single line of json object, aka jsonl format,
 and put them in a json block, for example:
 ```json
-{"name": "Alice", "title": "Associate Professor", "profile_url": "https://example.org/alice", "email": "alice@example.org", "introduction": "research interests include AI, machine learning, etc."}
-{"name": "Bob", "title": "Professor", "profile_url": "https://example.org/bob"}
+{"name":"Alice","title":"Associate Professor","profile_url":"https://example.org/alice"}
+{"name":"Bob","title":"Professor","profile_url":"https://example.org/bob"}
 ```
 Note that the data in example above is not real, you should replace them with the real data you find.
 You should try to find as much information as possible for each faculty member, but if you can't find some information, just leave them empty.
-""".strip().replace('FACULTY_OBJECT_SCHEMA', FACULTY_OBJECT_SCHEMA)
+""".strip()
 
 
-FIX_FACULTY_JSON = """
-Your job is to fix the invalid json string that contains faculty member information.
-A valid json string should respect the following typescript interface:
+SCHOLAR_OBJECT_SCHEMA = """
+You job is to retrive information of a scholar from a markdown file.
+The markdown file is a resume or profile of a scholar, which contains the following information.
+You need to extract information from the markdown file and build a Scholar object from what you find.
 
-FACULTY_OBJECT_SCHEMA
+The definition of the Scholar object is as follows:
 
-You need to fix it according to the interface above, and generate a new json string in json code block.
+```typescript
+// The Experience interface represents the experience of a person,
+// it can be a education experience, a work experience, a research experience, etc.
+interface Experience {
+    title: string;  // the title of the experience, e.g. Bachelor, Master, PhD, Postdoc, Professor, Engineer, etc.
+    institute: string;  // the name of the institute, e.g. University of Washington, Google, Microsoft, etc.
+    group?: string;  // the group of the experience, e.g. John's research group, Organic Chemistry Lab, etc.
+    advisor?: string;  // the advisor or group leader of the experience, e.g. Prof. John Doe, Dr. Alice, etc.
+    start_year?: number;  // the start year of the experience, e.g. 2010
+    end_year?: number; // the end year of the experience, e.g. 2015
+    description?: string;  // a brief description of the experience
+}
 
-For example:
+// The Scholar interface represents a scholar, e.g. a professor, an engineer, etc.
+interface Scholar {
+    name: string;
+    title?: string;  // current title of the scholar, e.g. Professor, Associate Professor, Prof, Enginner, etc.
+    email?: string;
+    goolge_scholar_url?: string; // the url to the google scholar profile of the scholar
+    introduction?: string; // a brief introduction of the scholar
+    research_domain: string;  // the research domain of the scholar, e.g. Machine Learning, Computer Vision, etc.
+    experiences?: Experience[]; // a list of experiences
+}
+```
+
+You must serialize the Scholar object you find to a json object and put it in a json block, for example:
+
 ```json
-{"name": "Alice", "title": "Associate Professor", "profile_url": "https://example.org/alice", "email": "alice@example.org"}
+{"name":"Alice","title":"Associate Professor","email":"alice@example.com","experiences":[{"title":"PhD","institute":"University of Washington", "group":"John's reserach team","advisor":"John Doe","start_year":2010,"end_year":2015,"description":"..."}]}
 ```
-
 Note that the data in example above is not real, you should replace them with the real data you find.
-You should try to find as much information as possible for each faculty member, but if you can't find some information, just leave them empty.
-""".strip().replace('FACULTY_OBJECT_SCHEMA', FACULTY_OBJECT_SCHEMA)
+You should try to find as much information as possible, but if you can't find some information, just leave them empty.
+""".strip()

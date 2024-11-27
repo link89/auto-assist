@@ -1,8 +1,9 @@
-from playwright.async_api import async_playwright
+from playwright.async_api import async_playwright, Playwright, BrowserContext, Page
 from bs4 import BeautifulSoup
 from openai import OpenAI
 from pydantic import BaseModel
 from typing import List
+from pprint import pprint
 
 import pandas as pd
 import subprocess as sp
@@ -123,7 +124,7 @@ class HunterCmd:
                 md_text = f.read()
             try:
                 res = self._get_open_ai_response(openai_client,
-                                                 prompt=prompt.RETRIVE_FACULTY_MEBERS,
+                                                 prompt=prompt.RETRIVE_FACULTY_MEMBERS,
                                                  text=md_text)
                 answer = res.choices[0].message.content
                 data = next(get_md_code_block(answer, '```json')).strip()
@@ -178,28 +179,93 @@ class HunterCmd:
         with open(out_file, 'wb') as f:
             df.to_excel(f, index=False)
 
-    def google_cv(self, input_files, out_dir):
-        ...
 
-    def retrive_former_team_in_cv(self, input_files, out_dir):
-        ...
+    async def _search_candidate(self, name, institue, profile_url, out_dir, page: Page, max_search=3):
+        os.makedirs(out_dir, exist_ok=True)
+        key = f'{name}-{institue}'
 
-    def google_former_team(self, input_files, out_dir):
-        ...
+        await page.unroute_all()
+        await page.route('**/*.{png,jpg,jpeg,webp,css,woff,woff2,ttf,svg}', lambda route: route.abort())
 
-    def retrive_team_members(self, input_files, out_dir):
-        ...
+        # run google search
+        gs_result_file = os.path.join(out_dir, f'{key}-google-search.json')
+        search_keywords = f'professor {name} {institue}'
+        if not os.path.exists(gs_result_file):
+            gs_results = await self._async_google_search(search_keywords, page)
+            with open(gs_result_file, 'w', encoding='utf-8') as f:
+                json.dump(gs_results, f)
+        else:
+            with open(gs_result_file, 'r', encoding='utf-8') as f:
+                gs_results = json.load(f)
+
+        # try to get CV from search result
+        for result in gs_results[:max_search]:
+            url = result['url']
+            filename = url_to_filename(url)
+            cv_html_file = os.path.join(out_dir, f'cv_{filename}')
+            if not os.path.exists(cv_html_file):
+                cv_html = await self._async_scrape_url(url, page)
+                with open(cv_html_file, 'w', encoding='utf-8') as f:
+                    f.write(cv_html)
+            cv_md_file = cv_html_file + '.md'
+            if not os.path.exists(cv_md_file):
+                sp.check_call(f'{self._pancdo_cmd} {self._pandoc_opt} {cv_html_file} -o {cv_md_file}', shell=True)
+
+            cv_data_file = cv_md_file + '.jsonl'
+            if not os.path.exists(cv_data_file):
+                prompt = ''
+
+
+
+
+
+
+
+    def google_search(self, keyword: str, debug=False):
+        async def _run():
+            async with async_playwright() as pw:
+                assert isinstance(self._browser_dir, str)
+                browser = await launch_browser(self._browser_dir)(pw)
+                page = browser.pages[0]
+                await page.unroute_all()
+                await page.route('**/*.{png,jpg,jpeg,webp,css,woff,woff2,ttf,svg}', lambda route: route.abort())
+                links = await self._async_google_search(keyword, page)
+                if debug:
+                    pprint(links)
+                    input('press any key to continue')
+                return links
+        links = asyncio.run(_run())
+        return links
+
+    async def _async_google_search(self, keyword: str, page: Page):
+        await page.goto('https://www.google.com')
+        await page.fill('textarea[name="q"]', keyword)
+        await page.press('textarea[name="q"]', 'Enter')
+        await page.wait_for_selector('div#search div.g[jscontroller][jsaction]')
+        return await page.evaluate(
+            '''() => Array.from(document.querySelectorAll('div#search div.g[jscontroller][jsaction]')).map(e => ({
+            title: e.querySelector('h3')?.innerText,
+            url: e.querySelector('a')?.href,
+            snippet: e.querySelector('span')?.innerText
+        }))''')
 
     def _requests_get(self, url):
         user_agent = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0.0.0 Safari/537.36 Edg/130.0.0.0 '
         if self._proxy:
             proxies = {
                 'http': self._proxy,
-                'https': self._proxy
+                'https': self._proxy,
             }
         else:
             proxies = None
         return requests.get(url, proxies=proxies, headers={'User-Agent': user_agent})
+
+    async def _async_scrape_url(self, url, page: Page, delay=0.5):
+        await page.goto(url)
+        await page.wait_for_load_state('domcontentloaded')
+        if delay > 0:
+            await asyncio.sleep(delay)
+        return await page.content()
 
     async def _async_scrape_urls(self, urls: List[str], out_dir: str):
         async with async_playwright() as pw:

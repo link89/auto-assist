@@ -40,7 +40,6 @@ def url_to_filename(url: str, include_query=False):
         The url to convert
     """
     parsed = urlparse(url)
-
     filename = parsed.path.replace('/', '_')
     if include_query:
         filename += parsed.query
