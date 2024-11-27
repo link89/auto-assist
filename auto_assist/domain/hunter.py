@@ -9,7 +9,6 @@ import pandas as pd
 import subprocess as sp
 import requests
 import asyncio
-import shlex
 import json
 import os
 
@@ -190,7 +189,6 @@ class HunterCmd:
                     profile_url = row['profile_url']
                     scholar_objs = await self._async_search_cv(
                         name, institue, out_dir, page, max_search=max_search, profile_url=profile_url)
-                    pprint(scholar_objs)
         asyncio.run(_run())
 
 
