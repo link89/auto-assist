@@ -198,7 +198,7 @@ class HunterCmd:
         os.makedirs(out_dir, exist_ok=True)
         key = f'{name}-{institue}'
 
-        data_file = os.path.join(out_dir, f'{key}.json')
+        data_file = os.path.join(out_dir, f'final-{key}.json')
         if os.path.exists(data_file):
             with open(data_file, 'r', encoding='utf-8') as f:
                 return json.load(f)
