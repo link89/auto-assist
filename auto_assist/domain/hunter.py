@@ -213,7 +213,7 @@ class HunterCmd:
         if not os.path.exists(gs_result_file):
             gs_results = await self._async_google_search(search_keywords, page)
             with open(gs_result_file, 'w', encoding='utf-8') as f:
-                json.dump(gs_results, f)
+                json.dump(gs_results, f, indent=2)
         else:
             with open(gs_result_file, 'r', encoding='utf-8') as f:
                 gs_results = json.load(f)
@@ -234,25 +234,33 @@ class HunterCmd:
             cv_md_file = cv_html_file + '.md'
             if not os.path.exists(cv_md_file):
                 sp.check_call(f'{self._pancdo_cmd} {self._pandoc_opt} "{cv_html_file}" -o "{cv_md_file}"', shell=True)
-            with open(cv_md_file, 'r', encoding='utf-8') as f:
-                cv_md_content = f.read()
-            res = self._get_open_ai_response(
-                client=self._get_open_ai_client(),
-                prompt=prompt.SCHOLAR_OBJECT_SCHEMA,
-                text=cv_md_content
-            )
-            answer = res.choices[0].message.content
-            data = next(get_md_code_block(answer, '```json')).strip()
-            try:
-                obj = json.loads(data)
-                parsed_objs.append(obj)
-            except Exception as e:
-                logger.exception(f'fail to parse json data')
-                continue
+
+            cv_json_file = cv_md_file + '.json'
+            if not os.path.exists(cv_json_file):
+                with open(cv_md_file, 'r', encoding='utf-8') as f:
+                    cv_md_content = f.read()
+                res = self._get_open_ai_response(
+                    client=self._get_open_ai_client(),
+                    prompt=prompt.SCHOLAR_OBJECT_SCHEMA,
+                    text=cv_md_content
+                )
+                answer = res.choices[0].message.content
+                data = next(get_md_code_block(answer, '```json')).strip()
+                try:
+                    obj = json.loads(data)
+                    with open(cv_json_file, 'w', encoding='utf-8') as f:
+                        json.dump(obj, f, indent=2)
+                except Exception as e:
+                    logger.exception(f'fail to parse json data')
+                    continue
+            else:
+                with open(cv_json_file, 'r', encoding='utf-8') as f:
+                    obj = json.load(f)
+            parsed_objs.append(obj)
 
         if parsed_objs:
             with open(data_file, 'w', encoding='utf-8') as f:
-                json.dump(parsed_objs, f)
+                json.dump(parsed_objs, f, indent=2)
 
 
     def google_search(self, keyword: str, debug=False):
