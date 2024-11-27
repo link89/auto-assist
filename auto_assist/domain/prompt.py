@@ -24,8 +24,9 @@ You should try to find as much information as possible for each faculty member, 
 
 
 SCHOLAR_OBJECT_SCHEMA = """
-You job is to retrive information of a scholar from a markdown file.
-The markdown file is a resume or profile of a scholar, which contains the following information.
+You job is to retrive information of a scholar object from a markdown file.
+
+The markdown file is a resumes or profile of a scholar, include their education, work experience, research experience, publications, etc.
 You need to extract information from the markdown file and build a Scholar object from what you find.
 
 The definition of the Scholar object is as follows:
@@ -39,7 +40,7 @@ interface Experience {
     group?: string;  // the group of the experience, e.g. John's research group, Organic Chemistry Lab, etc.
     advisor?: string;  // the advisor or group leader of the experience, e.g. Prof. John Doe, Dr. Alice, etc.
     start_year?: number;  // the start year of the experience, e.g. 2010
-    end_year?: number; // the end year of the experience, e.g. 2015
+    end_year?: number; // the end year of the experience, e.g. 2015. If there is only one year is found, in most case its the end year, unless the experience is ongoing, for example, the current job.
     description?: string;  // a brief description of the experience
 }
 
@@ -52,6 +53,7 @@ interface Scholar {
     introduction?: string; // a brief introduction of the scholar
     research_domain: string;  // the research domain of the scholar, e.g. Machine Learning, Computer Vision, etc.
     experiences?: Experience[]; // a list of experiences
+    publicatinos?: string[];  // a list of publications of the scholar
 }
 ```
 
@@ -62,4 +64,6 @@ You must serialize the Scholar object you find to a json object and put it in a 
 ```
 Note that the data in example above is not real, you should replace them with the real data you find.
 You should try to find as much information as possible, but if you can't find some information, just leave them empty.
+
 """.strip()
+

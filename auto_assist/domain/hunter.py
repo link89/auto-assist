@@ -9,6 +9,7 @@ import pandas as pd
 import subprocess as sp
 import requests
 import asyncio
+import shlex
 import json
 import os
 
@@ -93,17 +94,10 @@ class HunterCmd:
             filename = os.path.basename(in_file)
             out_file = os.path.join(out_dir, filename) if out_dir else in_file
             logger.info(f'cleaning {in_file} to {out_file}')
-            with open(in_file, encoding='utf-8') as f:
-                soup = BeautifulSoup(f, 'html.parser')
-                # remove base64 images
-                for img in soup.find_all('img'):
-                    if img.get('src', '').startswith('data:image'):
-                        img.decompose()
-                # remove svg images
-                for svg in soup.find_all('svg'):
-                    svg.decompose()
-            with open(out_file, 'w', encoding='utf-8') as f:
-                f.write(str(soup))
+            with open(in_file, 'r+', encoding='utf-8') as f:
+                cleaned = clean_html(f)
+                f.seek(0)
+                f.write(cleaned)
 
     def retrive_faculty_members(self, *md_files, out_dir):
         """
@@ -133,7 +127,7 @@ class HunterCmd:
             except Exception as e:
                 logger.exception(f'fail to retrive faculty members from {md_file}')
 
-    def filter_candidates(self, *jsonl_files, out_file, excel_file, col_name='FacultyPage'):
+    def filter_professor_candidates(self, *jsonl_files, out_file, excel_file, col_name='FacultyPage'):
         """
         filter candidates from jsonl files
 
@@ -179,16 +173,42 @@ class HunterCmd:
         with open(out_file, 'wb') as f:
             df.to_excel(f, index=False)
 
+    def search_cvs(self, in_excel, out_dir, max_search=3):
+        df = self.load_excel(in_excel)
+        async def _run():
+            async with async_playwright() as pw:
+                # setup browser
+                assert isinstance(self._browser_dir, str)
+                browser = await launch_browser(self._browser_dir)(pw)
+                page = browser.pages[0]
+                await page.unroute_all()
+                await page.route('**/*.{png,jpg,jpeg,webp,css,woff,woff2,ttf,svg}', lambda route: route.abort())
+                # search cv
+                for i, row in df.iterrows():
+                    name = row['name']
+                    institue = row['institute']
+                    profile_url = row['profile_url']
+                    scholar_objs = await self._async_search_cv(
+                        name, institue, out_dir, page, max_search=max_search, profile_url=profile_url)
+                    pprint(scholar_objs)
+        asyncio.run(_run())
 
-    async def _search_candidate(self, name, institue, profile_url, out_dir, page: Page, max_search=3):
+
+    async def _async_search_cv(self, name, institue, out_dir, page: Page, max_search=3, profile_url=None):
         os.makedirs(out_dir, exist_ok=True)
         key = f'{name}-{institue}'
 
+        data_file = os.path.join(out_dir, f'{key}.json')
+        if os.path.exists(data_file):
+            with open(data_file, 'r', encoding='utf-8') as f:
+                return json.load(f)
+
+        # setup browser
         await page.unroute_all()
         await page.route('**/*.{png,jpg,jpeg,webp,css,woff,woff2,ttf,svg}', lambda route: route.abort())
 
         # run google search
-        gs_result_file = os.path.join(out_dir, f'{key}-google-search.json')
+        gs_result_file = os.path.join(out_dir, f'google-{key}.json')
         search_keywords = f'professor {name} {institue}'
         if not os.path.exists(gs_result_file):
             gs_results = await self._async_google_search(search_keywords, page)
@@ -198,27 +218,41 @@ class HunterCmd:
             with open(gs_result_file, 'r', encoding='utf-8') as f:
                 gs_results = json.load(f)
 
-        # try to get CV from search result
-        for result in gs_results[:max_search]:
-            url = result['url']
+        # retrive data from web page
+        urls = [r['url'] for r in gs_results][:max_search]
+        if profile_url:
+            urls.append(profile_url)
+
+        parsed_objs = []
+        for url in urls:
             filename = url_to_filename(url)
-            cv_html_file = os.path.join(out_dir, f'cv_{filename}')
+            cv_html_file = os.path.join(out_dir, f'cv-{key}-{filename}')
             if not os.path.exists(cv_html_file):
                 cv_html = await self._async_scrape_url(url, page)
                 with open(cv_html_file, 'w', encoding='utf-8') as f:
                     f.write(cv_html)
             cv_md_file = cv_html_file + '.md'
             if not os.path.exists(cv_md_file):
-                sp.check_call(f'{self._pancdo_cmd} {self._pandoc_opt} {cv_html_file} -o {cv_md_file}', shell=True)
+                sp.check_call(f'{self._pancdo_cmd} {self._pandoc_opt} "{cv_html_file}" -o "{cv_md_file}"', shell=True)
+            with open(cv_md_file, 'r', encoding='utf-8') as f:
+                cv_md_content = f.read()
+            res = self._get_open_ai_response(
+                client=self._get_open_ai_client(),
+                prompt=prompt.SCHOLAR_OBJECT_SCHEMA,
+                text=cv_md_content
+            )
+            answer = res.choices[0].message.content
+            data = next(get_md_code_block(answer, '```json')).strip()
+            try:
+                obj = json.loads(data)
+                parsed_objs.append(obj)
+            except Exception as e:
+                logger.exception(f'fail to parse json data')
+                continue
 
-            cv_data_file = cv_md_file + '.jsonl'
-            if not os.path.exists(cv_data_file):
-                prompt = ''
-
-
-
-
-
+        if parsed_objs:
+            with open(data_file, 'w', encoding='utf-8') as f:
+                json.dump(parsed_objs, f)
 
 
     def google_search(self, keyword: str, debug=False):
@@ -260,12 +294,15 @@ class HunterCmd:
             proxies = None
         return requests.get(url, proxies=proxies, headers={'User-Agent': user_agent})
 
-    async def _async_scrape_url(self, url, page: Page, delay=0.5):
+    async def _async_scrape_url(self, url, page: Page, delay=0.5, clean=True):
         await page.goto(url)
         await page.wait_for_load_state('domcontentloaded')
         if delay > 0:
             await asyncio.sleep(delay)
-        return await page.content()
+        content = await page.content()
+        if clean:
+            content = clean_html(content)
+        return content
 
     async def _async_scrape_urls(self, urls: List[str], out_dir: str):
         async with async_playwright() as pw:
@@ -308,7 +345,7 @@ class HunterCmd:
             json.dump(res.model_dump(), f)
         return res
 
-    def _load_context(self, excel_file):
+    def load_excel(self, excel_file):
         import pandas as pd
         with open(excel_file, 'rb') as f:
             return pd.read_excel(f)
@@ -322,3 +359,15 @@ class FacultyMember(BaseModel):
     institute: str = ''
     department: str = ''
     profile_url: str = ''
+
+
+def clean_html(markup):
+    soup = BeautifulSoup(markup, 'html.parser')
+    # remove base64 images
+    for img in soup.find_all('img'):
+        if img.get('src', '').startswith('data:image'):
+            img.decompose()
+    # remove svg images
+    for svg in soup.find_all('svg'):
+        svg.decompose()
+    return str(soup)
