@@ -10,6 +10,7 @@ import subprocess as sp
 import requests
 import asyncio
 import json
+import time
 import os
 
 from auto_assist.lib import (
@@ -172,7 +173,7 @@ class HunterCmd:
         with open(out_file, 'wb') as f:
             df.to_excel(f, index=False)
 
-    def search_cvs(self, in_excel, out_dir, max_search=3):
+    def search_cvs(self, in_excel, out_dir, max_search=3, max_tries=1, delay=1):
         df = self.load_excel(in_excel)
         async def _run():
             async with async_playwright() as pw:
@@ -189,7 +190,13 @@ class HunterCmd:
                     profile_url = row['profile_url']
                     scholar_objs = await self._async_search_cv(
                         name, institue, out_dir, page, max_search=max_search, profile_url=profile_url)
-        asyncio.run(_run())
+
+        for _ in range(max_tries):
+            try:
+                asyncio.run(_run())
+            except Exception as e:
+                logger.exception(f'fail to search cvs')
+                time.sleep(delay)
 
 
     async def _async_search_cv(self, name, institue, out_dir, page: Page, max_search=3, profile_url=None):
@@ -301,7 +308,7 @@ class HunterCmd:
         return requests.get(url, proxies=proxies, headers={'User-Agent': user_agent})
 
     async def _async_scrape_url(self, url, page: Page, delay=0.5, clean=True):
-        await page.goto(url)
+        await page.goto(url, timeout=60e3)
         await page.wait_for_load_state('domcontentloaded')
         if delay > 0:
             await asyncio.sleep(delay)

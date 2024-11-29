@@ -26,7 +26,7 @@ You should try to find as much information as possible for each faculty member, 
 SCHOLAR_OBJECT_SCHEMA = """
 You job is to retrive information of a scholar object from a markdown file.
 
-The markdown file is a resumes or profile of a scholar, include their education, work experience, research experience, publications, etc.
+The markdown file is a resumes or profile of a scholar.
 You need to extract information from the markdown file and build a Scholar object from what you find.
 
 The definition of the Scholar object is as follows:
@@ -53,7 +53,6 @@ interface Scholar {
     introduction?: string; // a brief introduction of the scholar
     research_domain: string;  // the research domain of the scholar, e.g. Machine Learning, Computer Vision, etc.
     experiences?: Experience[]; // a list of experiences
-    publicatinos?: string[];  // a list of publications of the scholar
 }
 ```
 
@@ -64,6 +63,6 @@ You must serialize the Scholar object you find to a json object and put it in a 
 ```
 Note that the data in example above is not real, you should replace them with the real data you find.
 You should try to find as much information as possible, but if you can't find some information, just leave them empty.
-
+Note that you should strictly follow the schema of the Scholar object, and the Experience object, and the data type of each field. Don't add any extra fields that are not defined in the schema.
 """.strip()
 
