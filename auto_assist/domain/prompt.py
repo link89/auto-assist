@@ -37,8 +37,9 @@ The definition of the Scholar object is as follows:
 interface Experience {
     title: string;  // the title of the experience, e.g. Bachelor, Master, PhD, Postdoc, Professor, Engineer, etc.
     institute: string;  // the name of the institute, e.g. University of Washington, Google, Microsoft, etc.
-    group?: string;  // the group of the experience, e.g. John's research group, Organic Chemistry Lab, etc.
-    advisor?: string;  // the advisor or group leader of the experience, e.g. Prof. John Doe, Dr. Alice, etc.
+    department?: string;  // the department of the institute, e.g. Computer Science, Electrical Engineering, etc.
+    group?: string;  // the group of the experience, e.g. John's research group, AI4EC Lab, etc. Note that group is different from department, group is more specific, and department is more general. Leave it empty if not applicable.
+    advisor?: string;  // the advisor or group leader of the experience, e.g. Prof. John Doe, Dr. Alice, etc. You may infer this from the group name if the advisor is not explicitly mentioned, for example, if the group is John's research group, then John is the advisor.
     start_year?: number;  // the start year of the experience, e.g. 2010
     end_year?: number; // the end year of the experience, e.g. 2015. If there is only one year is found, in most case its the end year, unless the experience is ongoing, for example, the current job.
     description?: string;  // a brief description of the experience
@@ -66,3 +67,31 @@ You should try to find as much information as possible, but if you can't find so
 Note that you should strictly follow the schema of the Scholar object, and the Experience object, and the data type of each field. Don't add any extra fields that are not defined in the schema.
 """.strip()
 
+
+RETRIVE_GROUP_MEMBERS = """
+Your job is to retrive information of group members from a markdown file.
+The markdown file is a web page about a research group that contain list of group members.
+
+You need to extract information of all group members from the markdown file and build a list of Member objects from what you find. The Member object is defined as the following TypeScript interface:
+
+```typescript
+interface Member {
+    name: string;
+    title: string;  // the title of the member, e.g. Bachelor, Master, PhD, Postdoc, Professor, Engineer, etc.
+    start_year?: number;  // the start year of the member join the group, e.g. 2010
+    description?: string;  // a brief description of the member
+    is_chinese?: boolean;  // whether the member is Chinese, you can infer this from the name or other information, for example, the name is Chinese pinyin, or the member is from a Chinese institute, etc.
+}
+```
+You must serialize every Member object you find to a single line of json object, aka jsonl format,
+and put them in a json block, for example:
+
+```json
+{"name":"Alice","title":"PhD","start_year":2010,"description":"...", "is_chinese":false}
+{"name":"San Zhang","title":"Master","start_year":2015, "is_chinese":true}
+```
+
+Note that the data in example above is not real, you should replace them with the real data you find.
+You should try to find as much information as possible for each member, but if you can't find some information, just leave them empty.
+Note that you should strictly follow the schema of the Member object, include data type of each field. Don't add any extra fields that are not defined in the schema.
+""".strip()

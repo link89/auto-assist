@@ -194,9 +194,89 @@ class HunterCmd:
         for _ in range(max_tries):
             try:
                 asyncio.run(_run())
+                logger.info('search cvs done')
+                break
             except Exception as e:
                 logger.exception(f'fail to search cvs')
                 time.sleep(delay)
+
+    def filter_teams_from_cvs(self, *json_files, out_file):
+        """
+        filter teams from json files
+
+        :param json_files: list of str
+            The json files that contains cv data
+        :param out_file: str
+            The output file in excel format to save the teams
+        """
+
+        teams = []
+        for json_file in expand_globs(json_files):
+            with open(json_file, 'r', encoding='utf-8') as fp:
+                data = json.load(fp)
+            if not isinstance(data, list):
+                data = [data]
+
+            for cv in data:
+                member = cv['name']
+                email = cv.get('email', '')
+                for exp in cv.get('experiences', []):
+                    row = {
+                        'member': member,
+                        'email': email,
+                        'title': exp.get('title', ''),
+                        'institute': exp.get('institute', ''),
+                        'group': exp.get('group', ''),
+                        'advisor': exp.get('advisor', ''),
+                    }
+                    if is_graduate(row['title']):
+                        teams.append(row)
+
+        with open(out_file, 'wb') as f:
+            df = pd.DataFrame(teams)
+            df.to_excel(f, index=False)
+
+
+    def search_team_members(self, in_excel, out_dir, max_search=3, max_tries=1, delay=1):
+        """
+        Search team members from excel file
+
+        :param in_excel: str
+            The input excel file that contains advisor and group information
+        :param out_dir: str
+        """
+
+        df = self.load_excel(in_excel)
+        async def _run():
+            async with async_playwright() as pw:
+                # setup browser
+                assert isinstance(self._browser_dir, str)
+                browser = await launch_browser(self._browser_dir)(pw)
+                page = browser.pages[0]
+                await page.unroute_all()
+                await page.route('**/*.{png,jpg,jpeg,webp,css,woff,woff2,ttf,svg}', lambda route: route.abort())
+                # search team members
+                for i, row in df.iterrows():
+                    ...
+
+
+        for _ in range(max_tries):
+            try:
+                asyncio.run(_run())
+                logger.info('search team members done')
+                break
+            except Exception as e:
+                logger.exception(f'fail to search team members')
+                time.sleep(delay)
+
+    async def _async_search_team(self, advisor, institute, out_dir, page: Page, max_search=3):
+        os.makedirs(out_dir, exist_ok=True)
+        key = f'{advisor}-{institute}'
+        # run google search
+        gs_search_file = os.path.join(out_dir, key, 'google-search.json')
+        search_keywords = f'{advisor} research group members people {institute}'
+
+
 
 
     async def _async_search_cv(self, name, institue, out_dir, page: Page, max_search=3, profile_url=None):
@@ -207,10 +287,6 @@ class HunterCmd:
         if os.path.exists(data_file):
             with open(data_file, 'r', encoding='utf-8') as f:
                 return json.load(f)
-
-        # setup browser
-        await page.unroute_all()
-        await page.route('**/*.{png,jpg,jpeg,webp,css,woff,woff2,ttf,svg}', lambda route: route.abort())
 
         # run google search
         gs_result_file = os.path.join(out_dir, f'google-{key}.json')
@@ -384,3 +460,11 @@ def clean_html(markup):
     for svg in soup.find_all('svg'):
         svg.decompose()
     return str(soup)
+
+
+def is_graduate(title: str):
+    title = title.lower()
+    for keyword in ['phd', 'doctor', 'ph.d', 'post']:
+        if keyword in title:
+            return True
+    return False
