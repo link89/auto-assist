@@ -273,7 +273,21 @@ class HunterCmd:
                 logger.exception(f'fail to search team members')
                 time.sleep(delay)
 
-    async def _async_search_group(self, group: pd.Series, out_dir, page: Page, max_search=3, parse=False):
+    def filter_group_members(self, *group_dirs, out_dir):
+        """
+        Filter group members from group directories
+
+        :param group_dirs: list of str
+            The group directories that contains group members
+        :param out_dir: str
+            The output directory to save the filtered members
+        """
+
+
+
+
+    async def _async_search_group(self, group: pd.Series, out_dir, page: Page,
+                                  max_search=3, parse=False):
         advisor = group['advisor']
         institute = group['institute']
         key = f'{advisor}-{institute}'
@@ -327,23 +341,26 @@ class HunterCmd:
 
             with open(group_md_file, 'r', encoding='utf-8') as f:
                 group_md_content = f.read()
-            res = self._get_open_ai_response(
-                client=self._get_open_ai_client(),
-                prompt=prompt.RETRIVE_GROUP_MEMBERS,
-                text=group_md_content
-            )
-            answer = res.choices[0].message.content
+
+            answer = ''
             try:
+                res = self._get_open_ai_response(
+                    client=self._get_open_ai_client(),
+                    prompt=prompt.RETRIVE_GROUP_MEMBERS,
+                    text=group_md_content
+                )
+                answer = res.choices[0].message.content
                 data = next(get_md_code_block(answer, '```json')).strip()
                 if not data:
-                    logger.warning(f'no data found for {url}')
+                    logger.warning(f'no data found for {group_md_file}')
                     continue
                 # check if the data is valid jsonl
                 members = jsonl_loads(data)
                 with open(group_jsonl_file, 'w', encoding='utf-8') as f:
                     jsonl_dump(f, members)
             except Exception as e:
-                logger.exception(f'fail to parse json data')
+                logger.exception(f'fail to parse json data: {group_md_file}')
+                logger.info(f'answer: {answer}')
                 continue
 
     def pandoc_convert(self, in_html, out_md):
@@ -397,19 +414,19 @@ class HunterCmd:
             if not os.path.exists(cv_json_file):
                 with open(cv_md_file, 'r', encoding='utf-8') as f:
                     cv_md_content = f.read()
-                res = self._get_open_ai_response(
-                    client=self._get_open_ai_client(),
-                    prompt=prompt.SCHOLAR_OBJECT_SCHEMA,
-                    text=cv_md_content
-                )
-                answer = res.choices[0].message.content
-                data = next(get_md_code_block(answer, '```json')).strip()
                 try:
+                    res = self._get_open_ai_response(
+                        client=self._get_open_ai_client(),
+                        prompt=prompt.SCHOLAR_OBJECT_SCHEMA,
+                        text=cv_md_content
+                    )
+                    answer = res.choices[0].message.content
+                    data = next(get_md_code_block(answer, '```json')).strip()
                     obj = json.loads(data)
                     with open(cv_json_file, 'w', encoding='utf-8') as f:
                         json.dump(obj, f, indent=2)
                 except Exception as e:
-                    logger.exception(f'fail to parse json data')
+                    logger.exception(f'fail to parse json data: {cv_md_file}')
                     continue
             else:
                 with open(cv_json_file, 'r', encoding='utf-8') as f:

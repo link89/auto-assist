@@ -119,16 +119,15 @@ def ensure_dir(path):
     if d:
         os.makedirs(d, exist_ok=True)
 
+
 def clean_html(markup):
     soup = BeautifulSoup(markup, 'html.parser')
     for tag in soup():
-        attrs = tag.attrs or {}
-        for attr in ['class', 'id', 'style']:
-            if attr in attrs:
-                del tag[attr]
+        attrs = tag.attrs.copy() if tag.attrs else []
+        for attr in attrs:
+            del tag[attr]
+
+
         if tag.name in ['script', 'style', 'noscript', 'svg', 'img', 'iframe']:
             tag.decompose()
-        # remove base64 images
-        # if tag.name == 'img' and tag.get('src', '').startswith('data:image'):
-        #     tag.decompose()
     return str(soup)
