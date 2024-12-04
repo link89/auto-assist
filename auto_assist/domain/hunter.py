@@ -261,8 +261,7 @@ class HunterCmd:
                     if not isinstance(advisor, str) or not advisor or advisor.lower() in known_advisors:
                         continue
                     known_advisors.add(advisor.lower())
-                    institute = row['institute']
-                    await self._async_search_group(advisor, institute, out_dir, page,
+                    await self._async_search_group(row, out_dir, page,
                                                    max_search=max_search, parse=parse)
 
         for _ in range(max_tries):
@@ -274,17 +273,24 @@ class HunterCmd:
                 logger.exception(f'fail to search team members')
                 time.sleep(delay)
 
-    async def _async_search_group(self, advisor, institute, out_dir, page: Page, max_search=3, parse=False):
-        os.makedirs(out_dir, exist_ok=True)
-
+    async def _async_search_group(self, group: pd.Series, out_dir, page: Page, max_search=3, parse=False):
+        advisor = group['advisor']
+        institute = group['institute']
         key = f'{advisor}-{institute}'
-        # run google search
 
-        gs_search_file = os.path.join(out_dir, key, 'google-search.json')
+        group_dir = os.path.join(out_dir, key)
+        os.makedirs(group_dir, exist_ok=True)
+
+        # dump index.json
+        index_file = os.path.join(group_dir, 'index.json')
+        with open(index_file, 'w', encoding='utf-8') as f:
+            f.write(group.to_json())
+
+        # google search
+        gs_search_file = os.path.join(group_dir, 'google-search.json')
         search_keywords = f'(research group of {advisor}) AND (members or people) AND (graduate or phd or postdoctoral) {institute}'
         if not os.path.exists(gs_search_file):
             gs_results = await self._async_google_search(search_keywords, page)
-            ensure_dir(gs_search_file)
             with open(gs_search_file, 'w', encoding='utf-8') as f:
                 json.dump(gs_results, f, indent=2)
         else:
@@ -295,8 +301,7 @@ class HunterCmd:
         urls = [r['url'] for r in gs_results if not is_personal_page(r['url'])][:max_search]
         for url in urls:
             filename = url_to_filename(url)
-            group_html_file = os.path.join(out_dir, key, f'group-{filename}')
-            ensure_dir(group_html_file)
+            group_html_file = os.path.join(group_dir, f'group-{filename}')
             group_md_file = group_html_file + '.md'
             group_jsonl_file = group_md_file + '.jsonl'
 
@@ -330,11 +335,11 @@ class HunterCmd:
             answer = res.choices[0].message.content
             try:
                 data = next(get_md_code_block(answer, '```json')).strip()
+                if not data:
+                    logger.warning(f'no data found for {url}')
+                    continue
+                # check if the data is valid jsonl
                 members = jsonl_loads(data)
-                for m in members:
-                    m['institute'] = institute
-                    m['advisor'] = advisor
-                    m['src'] = url
                 with open(group_jsonl_file, 'w', encoding='utf-8') as f:
                     jsonl_dump(f, members)
             except Exception as e:

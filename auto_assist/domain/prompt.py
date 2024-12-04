@@ -51,8 +51,8 @@ interface Scholar {
     title?: string;  // current title of the scholar, e.g. Professor, Associate Professor, Prof, Enginner, etc.
     email?: string;
     goolge_scholar_url?: string; // the url to the google scholar profile of the scholar
-    introduction?: string; // a brief introduction of the scholar
-    research_domain: string;  // the research domain of the scholar, e.g. Machine Learning, Computer Vision, etc.
+    introduction?: string; // a brief introduction of the scholar, you can summarize it if it is too long
+    research_domain: string;  // the research domain of the scholar, e.g. Machine Learning, Computer Vision, etc. You can infer this from the description if it is not explicitly mentioned.
     experiences?: Experience[]; // a list of experiences
 }
 ```
@@ -63,7 +63,7 @@ You must serialize the Scholar object you find to a json object and put it in a 
 {"name":"Alice","title":"Associate Professor","email":"alice@example.com","experiences":[{"title":"PhD","institute":"University of Washington", "group":"John's reserach team","advisor":"John Doe","start_year":2010,"end_year":2015,"description":"..."}]}
 ```
 Note that the data in example above is not real, you should replace them with the real data you find.
-You should try to find as much information as possible, but if you can't find some information, just leave them empty.
+You should try to find as much information as possible, but if you can't find some information, just leave them empty. Don't use any fake data like "Unknown University", "No Email", etc.
 Note that you should strictly follow the schema of the Scholar object, and the Experience object, and the data type of each field. Don't add any extra fields that are not defined in the schema.
 """.strip()
 
