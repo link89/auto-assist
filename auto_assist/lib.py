@@ -1,5 +1,6 @@
 from urllib.parse import urlparse
 from typing import Iterable, List
+from bs4 import BeautifulSoup
 
 import logging
 import glob
@@ -99,12 +100,15 @@ def jsonl_load(fp):
     for l in fp:
         yield json.loads(l)
 
+
 def jsonl_dump(fp, data):
     lines = [json.dumps(d) for d in data]
     fp.write('\n'.join(lines))
 
+
 def jsonl_loads(s):
     return [json.loads(l) for l in s.strip().split('\n')]
+
 
 def dict_ignore_none(d):
     return {k: v for k, v in d.items() if v is not None}
@@ -114,3 +118,16 @@ def ensure_dir(path):
     d = os.path.dirname(path)
     if d:
         os.makedirs(d, exist_ok=True)
+
+
+def clean_html(markup):
+    soup = BeautifulSoup(markup, 'html.parser')
+    for tag in soup():
+        for attr in ['class', 'id', 'style']:
+            del tag[attr]
+        if tag.name in ['script', 'style', 'noscript', 'svg']:
+            tag.decompose()
+        # remove base64 images
+        if tag.name == 'img' and tag.get('src', '').startswith('data:image'):
+            tag.decompose()
+    return str(soup)

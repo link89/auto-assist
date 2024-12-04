@@ -1,5 +1,4 @@
-from playwright.async_api import async_playwright, Playwright, BrowserContext, Page
-from bs4 import BeautifulSoup
+from playwright.async_api import async_playwright, Page
 from openai import OpenAI
 from pydantic import BaseModel
 from typing import List
@@ -14,7 +13,7 @@ import time
 import os
 
 from auto_assist.lib import (
-    url_to_filename, expand_globs, get_logger, ensure_dir,
+    url_to_filename, expand_globs, get_logger, ensure_dir, clean_html,
     get_md_code_block, jsonl_load, jsonl_dump, jsonl_loads, dict_ignore_none)
 from auto_assist.browser import launch_browser
 from auto_assist import config
@@ -237,7 +236,7 @@ class HunterCmd:
             df.to_excel(f, index=False)
 
 
-    def search_group_members(self, in_excel, out_dir, max_search=3, max_tries=1, delay=1):
+    def search_group_members(self, in_excel, out_dir, max_search=3, max_tries=1, delay=1, skip_llm=False):
         """
         Search group members from excel file
 
@@ -263,7 +262,8 @@ class HunterCmd:
                         continue
                     known_advisors.add(advisor.lower())
                     institute = row['institute']
-                    await self._async_search_group(advisor, institute, out_dir, page, max_search=max_search)
+                    await self._async_search_group(advisor, institute, out_dir, page,
+                                                   max_search=max_search, skip_llm=skip_llm)
 
         for _ in range(max_tries):
             try:
@@ -274,7 +274,7 @@ class HunterCmd:
                 logger.exception(f'fail to search team members')
                 time.sleep(delay)
 
-    async def _async_search_group(self, advisor, institute, out_dir, page: Page, max_search=3):
+    async def _async_search_group(self, advisor, institute, out_dir, page: Page, max_search=3, skip_llm=False):
         os.makedirs(out_dir, exist_ok=True)
         key = f'{advisor}-{institute}'
         # run google search
@@ -309,6 +309,9 @@ class HunterCmd:
                 self.pandoc_convert(group_html_file, group_md_file)
 
             # parse group members
+            if skip_llm:
+                continue
+
             with open(group_md_file, 'r', encoding='utf-8') as f:
                 group_md_content = f.read()
             res = self._get_open_ai_response(
@@ -511,18 +514,6 @@ class FacultyMember(BaseModel):
     institute: str = ''
     department: str = ''
     profile_url: str = ''
-
-
-def clean_html(markup):
-    soup = BeautifulSoup(markup, 'html.parser')
-    # remove base64 images
-    for img in soup.find_all('img'):
-        if img.get('src', '').startswith('data:image'):
-            img.decompose()
-    # remove svg images
-    for svg in soup.find_all('svg'):
-        svg.decompose()
-    return str(soup)
 
 
 def is_graduate(title: str):
