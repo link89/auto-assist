@@ -98,33 +98,10 @@ class HunterCmd:
                 f.seek(0)
                 f.write(cleaned)
 
-    def retrive_faculty_members(self, *md_files, out_dir):
+    def search_faculty_members(self, ):
         """
-        Retrive faculty members from markdown files
-        :param md_files: list of str
-            The markdown files to retrive faculty members
-        :param out_dir: str
-            The output directory
         """
-        os.makedirs(out_dir, exist_ok=True)
-        openai_client = self._get_open_ai_client()
-        for md_file in expand_globs(md_files):
-            data_file = os.path.join(out_dir, os.path.basename(md_file) + '.jsonl')
-            if os.path.exists(data_file):
-                logger.info(f'{data_file} already exists, skip')
-                continue
-            with open(md_file, encoding='utf-8') as f:
-                md_text = f.read()
-            try:
-                res = self._get_open_ai_response(openai_client,
-                                                 prompt=prompt.RETRIVE_FACULTY_MEMBERS,
-                                                 text=md_text)
-                answer = res.choices[0].message.content
-                data = next(get_md_code_block(answer, '```json')).strip()
-                with open(data_file, 'w', encoding='utf-8') as f:
-                    f.write(data)
-            except Exception as e:
-                logger.exception(f'fail to retrive faculty members from {md_file}')
+
 
     def filter_professor_candidates(self, *jsonl_files, out_file, excel_file, col_name='FacultyPage'):
         """
@@ -172,7 +149,7 @@ class HunterCmd:
         with open(out_file, 'wb') as f:
             df.to_excel(f, index=False)
 
-    def search_cvs(self, in_excel, out_dir, max_search=3, max_tries=1, delay=1):
+    def search_cvs(self, in_excel, out_dir, max_search=3, max_tries=1, delay=1, parse=False):
         df = self.load_excel(in_excel)
         async def _run():
             async with async_playwright() as pw:
@@ -182,14 +159,9 @@ class HunterCmd:
                 page = browser.pages[0]
                 await page.unroute_all()
                 await page.route('**/*.{png,jpg,jpeg,webp,css,woff,woff2,ttf,svg}', lambda route: route.abort())
-                # search cv
                 for i, row in df.iterrows():
-                    name = row['name']
-                    institue = row['institute']
-                    profile_url = row['profile_url']
-                    await self._async_search_cv(
-                        name, institue, out_dir, page, max_search=max_search, profile_url=profile_url)
-
+                    await self._async_search_cv(row, out_dir, page,
+                                                max_search=max_search, parse=parse)
         for _ in range(max_tries):
             try:
                 asyncio.run(_run())
@@ -199,7 +171,7 @@ class HunterCmd:
                 logger.exception(f'fail to search cvs')
                 time.sleep(delay)
 
-    def filter_teams_from_cvs(self, *json_files, out_file):
+    def process_cvs(self, *json_files, out_file):
         """
         filter teams from json files
 
@@ -284,6 +256,107 @@ class HunterCmd:
         """
 
 
+    def google_search(self, keyword: str, debug=False):
+        async def _run():
+            async with async_playwright() as pw:
+                assert isinstance(self._browser_dir, str)
+                browser = await launch_browser(self._browser_dir)(pw)
+                page = browser.pages[0]
+                await page.unroute_all()
+                await page.route('**/*.{png,jpg,jpeg,webp,css,woff,woff2,ttf,svg}', lambda route: route.abort())
+                links = await self._async_google_search(keyword, page)
+                if debug:
+                    pprint(links)
+                    input('press any key to continue')
+                return links
+        links = asyncio.run(_run())
+        return links
+
+    def pandoc_convert(self, in_html, out_md):
+        """
+        Convert html to markdown
+
+        :param in_html: str
+            The input html file
+        :param out_md: str
+            The output markdown file
+        """
+        return sp.check_call(f'{self._pancdo_cmd} {self._pandoc_opt} "{in_html}" -o "{out_md}"', shell=True)
+
+    async def _async_search_cv(self, profile: pd.Series, out_dir, page: Page,
+                               max_search=3, profile_url=None, parse=False):
+        name = profile['name']
+        institue = profile['institue']
+        key = f'{name}-{institue}'
+
+        cv_dir = os.path.join(out_dir, key)
+        os.makedirs(cv_dir, exist_ok=True)
+        # dump index.json
+        index_file = os.path.join(cv_dir, 'index.json')
+        with open(index_file, 'w', encoding='utf-8') as f:
+            f.write(profile.to_json())
+
+        # run google search
+        gs_result_file = os.path.join(cv_dir, f'google-search.json')
+        search_keyword = f'professor {name} {institue} (CV or resume or homepage or profile)'
+
+        if not os.path.exists(gs_result_file):
+            gs_results = await self._async_google_search(search_keyword, page)
+            with open(gs_result_file, 'w', encoding='utf-8') as f:
+                json.dump(gs_results, f, indent=2)
+        else:
+            with open(gs_result_file, 'r', encoding='utf-8') as f:
+                gs_results = json.load(f)
+
+        # retrive data from web page
+        urls = [r['url'] for r in gs_results if 'scholar.google' not in r['url']][:max_search]
+        if profile_url:
+            urls.append(profile_url)
+
+        for url in urls:
+            # scrape cv html
+            filename = url_to_filename(url)
+            cv_html_file = os.path.join(cv_dir, f'cv-{filename}')
+            cv_md_file = cv_html_file + '.md'
+            cv_json_file = cv_md_file + '.json'
+
+            if os.path.exists(cv_json_file):
+                continue
+
+            if not os.path.exists(cv_html_file):
+                cv_html = await self._async_scrape_url(url, page)
+            else:
+                with open(cv_html_file, 'r', encoding='utf-8') as f:
+                    cv_html = f.read()
+            cv_html = clean_html(cv_html)
+            with open(cv_html_file, 'w', encoding='utf-8') as f:
+                f.write(cv_html)
+
+            if not os.path.exists(cv_md_file):
+                self.pandoc_convert(cv_html_file, cv_md_file)
+
+            # parse cv
+            if not parse:
+                continue
+
+            with open(cv_md_file, 'r', encoding='utf-8') as f:
+                cv_md_content = f.read()
+            answer = ''
+            try:
+                res = self._get_open_ai_response(
+                    client=self._get_open_ai_client(),
+                    prompt=prompt.SCHOLAR_OBJECT_SCHEMA,
+                    text=cv_md_content
+                )
+                answer = res.choices[0].message.content
+                data = next(get_md_code_block(answer, '```json')).strip()
+                obj = json.loads(data)
+                with open(cv_json_file, 'w', encoding='utf-8') as f:
+                    json.dump(obj, f, indent=2)
+            except Exception as e:
+                logger.exception(f'fail to parse json data: {cv_md_file}')
+                logger.info(f'answer: {answer}')
+                continue
 
 
     async def _async_search_group(self, group: pd.Series, out_dir, page: Page,
@@ -362,96 +435,6 @@ class HunterCmd:
                 logger.exception(f'fail to parse json data: {group_md_file}')
                 logger.info(f'answer: {answer}')
                 continue
-
-    def pandoc_convert(self, in_html, out_md):
-        """
-        Convert html to markdown
-
-        :param in_html: str
-            The input html file
-        :param out_md: str
-            The output markdown file
-        """
-        return sp.check_call(f'{self._pancdo_cmd} {self._pandoc_opt} "{in_html}" -o "{out_md}"', shell=True)
-
-    async def _async_search_cv(self, name, institue, out_dir, page: Page, max_search=3, profile_url=None):
-        os.makedirs(out_dir, exist_ok=True)
-        key = f'{name}-{institue}'
-        data_file = os.path.join(out_dir, f'final-{key}.json')
-        if os.path.exists(data_file):
-            with open(data_file, 'r', encoding='utf-8') as f:
-                return json.load(f)
-
-        # run google search
-        gs_result_file = os.path.join(out_dir, f'google-{key}.json')
-        search_keywords = f'professor {name} {institue}'
-        if not os.path.exists(gs_result_file):
-            gs_results = await self._async_google_search(search_keywords, page)
-            with open(gs_result_file, 'w', encoding='utf-8') as f:
-                json.dump(gs_results, f, indent=2)
-        else:
-            with open(gs_result_file, 'r', encoding='utf-8') as f:
-                gs_results = json.load(f)
-
-        # retrive data from web page
-        urls = [r['url'] for r in gs_results][:max_search]
-        if profile_url:
-            urls.append(profile_url)
-
-        parsed_objs = []
-        for url in urls:
-            filename = url_to_filename(url)
-            cv_html_file = os.path.join(out_dir, f'cv-{key}-{filename}')
-            if not os.path.exists(cv_html_file):
-                cv_html = await self._async_scrape_url(url, page)
-                with open(cv_html_file, 'w', encoding='utf-8') as f:
-                    f.write(cv_html)
-            cv_md_file = cv_html_file + '.md'
-            if not os.path.exists(cv_md_file):
-                self.pandoc_convert(cv_html_file, cv_md_file)
-
-            cv_json_file = cv_md_file + '.json'
-            if not os.path.exists(cv_json_file):
-                with open(cv_md_file, 'r', encoding='utf-8') as f:
-                    cv_md_content = f.read()
-                try:
-                    res = self._get_open_ai_response(
-                        client=self._get_open_ai_client(),
-                        prompt=prompt.SCHOLAR_OBJECT_SCHEMA,
-                        text=cv_md_content
-                    )
-                    answer = res.choices[0].message.content
-                    data = next(get_md_code_block(answer, '```json')).strip()
-                    obj = json.loads(data)
-                    with open(cv_json_file, 'w', encoding='utf-8') as f:
-                        json.dump(obj, f, indent=2)
-                except Exception as e:
-                    logger.exception(f'fail to parse json data: {cv_md_file}')
-                    continue
-            else:
-                with open(cv_json_file, 'r', encoding='utf-8') as f:
-                    obj = json.load(f)
-            parsed_objs.append(obj)
-
-        if parsed_objs:
-            with open(data_file, 'w', encoding='utf-8') as f:
-                json.dump(parsed_objs, f, indent=2)
-
-    def google_search(self, keyword: str, debug=False):
-        async def _run():
-            async with async_playwright() as pw:
-                assert isinstance(self._browser_dir, str)
-                browser = await launch_browser(self._browser_dir)(pw)
-                page = browser.pages[0]
-                await page.unroute_all()
-                await page.route('**/*.{png,jpg,jpeg,webp,css,woff,woff2,ttf,svg}', lambda route: route.abort())
-                links = await self._async_google_search(keyword, page)
-                if debug:
-                    pprint(links)
-                    input('press any key to continue')
-                return links
-        links = asyncio.run(_run())
-        return links
 
     async def _async_google_search(self, keyword: str, page: Page):
         await page.goto('https://www.google.com')
@@ -546,6 +529,8 @@ def is_graduate(title: str):
     for keyword in ['phd', 'doctor', 'ph.d', 'post']:
         if keyword in title:
             return True
+    if 'graduate' in title and 'under' not in title:
+        return True
     return False
 
 
