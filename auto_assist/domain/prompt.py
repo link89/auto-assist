@@ -93,5 +93,6 @@ and put them in a json block, for example:
 
 Note that the data in example above is not real, you should replace them with the real data you find.
 You should try to find as much information as possible for each member, but if you can't find some information, just leave them empty.
+Note that it is possbile that the markdown page is not a group members page, but a page that contain other information, in this case, you should return an empty json block.
 Note that you should strictly follow the schema of the Member object, include data type of each field. Don't add any extra fields that are not defined in the schema.
 """.strip()

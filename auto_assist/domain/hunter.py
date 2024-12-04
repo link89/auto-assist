@@ -26,7 +26,7 @@ class HunterCmd:
 
     def __init__(self,
                  pandoc_cmd='pandoc',
-                 pandoc_opt='-f html -t gfm-raw_html',
+                 pandoc_opt='--sandbox -f html-native_divs-native_spans -t markdown',
                  openai_log='./openai-log.jsonl',
                  browser_dir=None,
                  proxy=None):
@@ -187,7 +187,7 @@ class HunterCmd:
                     name = row['name']
                     institue = row['institute']
                     profile_url = row['profile_url']
-                    scholar_objs = await self._async_search_cv(
+                    await self._async_search_cv(
                         name, institue, out_dir, page, max_search=max_search, profile_url=profile_url)
 
         for _ in range(max_tries):
@@ -235,8 +235,7 @@ class HunterCmd:
             df = pd.DataFrame(teams)
             df.to_excel(f, index=False)
 
-
-    def search_group_members(self, in_excel, out_dir, max_search=3, max_tries=1, delay=1, skip_llm=False):
+    def search_group_members(self, in_excel, out_dir, max_search=3, max_tries=1, delay=1, parse=False):
         """
         Search group members from excel file
 
@@ -252,7 +251,8 @@ class HunterCmd:
                 browser = await launch_browser(self._browser_dir)(pw)
                 page = browser.pages[0]
                 await page.unroute_all()
-                await page.route('**/*.{png,jpg,jpeg,webp,css,woff,woff2,ttf,svg}', lambda route: route.abort())
+                await page.route('**/*.{png,jpg,jpeg,webp,css,woff,woff2,ttf,svg}',
+                                 lambda route: route.abort())
                 # search team members
                 known_advisors = set()
 
@@ -263,7 +263,7 @@ class HunterCmd:
                     known_advisors.add(advisor.lower())
                     institute = row['institute']
                     await self._async_search_group(advisor, institute, out_dir, page,
-                                                   max_search=max_search, skip_llm=skip_llm)
+                                                   max_search=max_search, parse=parse)
 
         for _ in range(max_tries):
             try:
@@ -274,12 +274,14 @@ class HunterCmd:
                 logger.exception(f'fail to search team members')
                 time.sleep(delay)
 
-    async def _async_search_group(self, advisor, institute, out_dir, page: Page, max_search=3, skip_llm=False):
+    async def _async_search_group(self, advisor, institute, out_dir, page: Page, max_search=3, parse=False):
         os.makedirs(out_dir, exist_ok=True)
+
         key = f'{advisor}-{institute}'
         # run google search
+
         gs_search_file = os.path.join(out_dir, key, 'google-search.json')
-        search_keywords = f'{advisor} research group members people {institute}'
+        search_keywords = f'(research group of {advisor}) AND (members or people) AND (graduate or phd or postdoctoral) {institute}'
         if not os.path.exists(gs_search_file):
             gs_results = await self._async_google_search(search_keywords, page)
             ensure_dir(gs_search_file)
@@ -290,7 +292,7 @@ class HunterCmd:
                 gs_results = json.load(f)
 
         # retrive data from web page
-        urls = [r['url'] for r in gs_results][:max_search]
+        urls = [r['url'] for r in gs_results if not is_personal_page(r['url'])][:max_search]
         for url in urls:
             filename = url_to_filename(url)
             group_html_file = os.path.join(out_dir, key, f'group-{filename}')
@@ -303,13 +305,19 @@ class HunterCmd:
 
             if not os.path.exists(group_html_file):
                 group_html = await self._async_scrape_url(url, page)
-                with open(group_html_file, 'w', encoding='utf-8') as f:
-                    f.write(group_html)
+            else:
+                with open(group_html_file, 'r', encoding='utf-8') as f:
+                    group_html = f.read()
+            # the reason to seperate clean and save is to avoid re-scraping when debugging
+            group_html = clean_html(group_html)
+            with open(group_html_file, 'w', encoding='utf-8') as f:
+                f.write(group_html)
+
             if not os.path.exists(group_md_file):
                 self.pandoc_convert(group_html_file, group_md_file)
 
             # parse group members
-            if skip_llm:
+            if not parse:
                 continue
 
             with open(group_md_file, 'r', encoding='utf-8') as f:
@@ -328,11 +336,10 @@ class HunterCmd:
                     m['advisor'] = advisor
                     m['src'] = url
                 with open(group_jsonl_file, 'w', encoding='utf-8') as f:
-                    f.write(data)
+                    jsonl_dump(f, members)
             except Exception as e:
                 logger.exception(f'fail to parse json data')
                 continue
-
 
     def pandoc_convert(self, in_html, out_md):
         """
@@ -344,7 +351,6 @@ class HunterCmd:
             The output markdown file
         """
         return sp.check_call(f'{self._pancdo_cmd} {self._pandoc_opt} "{in_html}" -o "{out_md}"', shell=True)
-
 
     async def _async_search_cv(self, name, institue, out_dir, page: Page, max_search=3, profile_url=None):
         os.makedirs(out_dir, exist_ok=True)
@@ -409,7 +415,6 @@ class HunterCmd:
             with open(data_file, 'w', encoding='utf-8') as f:
                 json.dump(parsed_objs, f, indent=2)
 
-
     def google_search(self, keyword: str, debug=False):
         async def _run():
             async with async_playwright() as pw:
@@ -449,14 +454,12 @@ class HunterCmd:
             proxies = None
         return requests.get(url, proxies=proxies, headers={'User-Agent': user_agent})
 
-    async def _async_scrape_url(self, url, page: Page, delay=0.5, clean=True):
+    async def _async_scrape_url(self, url, page: Page, delay=0.5):
         await page.goto(url, timeout=60e3)
         await page.wait_for_load_state('domcontentloaded')
         if delay > 0:
             await asyncio.sleep(delay)
         content = await page.content()
-        if clean:
-            content = clean_html(content)
         return content
 
     async def _async_scrape_urls(self, urls: List[str], out_dir: str):
@@ -522,3 +525,12 @@ def is_graduate(title: str):
         if keyword in title:
             return True
     return False
+
+
+def is_personal_page(url):
+    kws = [
+        'linkedin', 'researchgate', 'scholar.google', 'wikipedia',
+        'youtube', 'reddit', 'twitter', 'x.com', 'facebook', 'instagram',
+        'github', 'gitlab', 'bitbucket', 'slides',
+    ]
+    return any(kw in url for kw in kws)
