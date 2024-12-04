@@ -77,9 +77,10 @@ You need to extract information of all group members from the markdown file and 
 ```typescript
 interface Member {
     name: string;
-    title: string;  // the title of the member, e.g. Bachelor, Master, PhD, Postdoc, Professor, Engineer, etc.
+    title?: string;  // the title of the member, e.g. Bachelor, Master, PhD, Postdoc, Professor, Engineer, etc.
+    email?: string;
     start_year?: number;  // the start year of the member join the group, e.g. 2010
-    description?: string;  // a brief description of the member
+    description?: string;  // a brief description of the member, you can summarize it if it is too long
     is_chinese?: boolean;  // whether the member is Chinese, you can infer this from the name or other information, for example, the name is Chinese pinyin, or the member is from a Chinese institute, etc.
 }
 ```
