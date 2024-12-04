@@ -13,7 +13,7 @@ import time
 import os
 
 from auto_assist.lib import (
-    url_to_filename, expand_globs, get_logger, ensure_dir, clean_html,
+    url_to_filename, expand_globs, get_logger, clean_html, formal_filename,
     get_md_code_block, jsonl_load, jsonl_dump, jsonl_loads, dict_ignore_none)
 from auto_assist.browser import launch_browser
 from auto_assist import config
@@ -245,15 +245,59 @@ class HunterCmd:
                 logger.exception(f'fail to search team members')
                 time.sleep(delay)
 
-    def filter_group_members(self, *group_dirs, out_dir):
+    def process_groups(self, *group_dirs, out_excel):
         """
         Filter group members from group directories
 
         :param group_dirs: list of str
             The group directories that contains group members
-        :param out_dir: str
-            The output directory to save the filtered members
+        :param out_excel: str
+            The output excel file to save the group members
         """
+        groups = []
+        candidates = []
+
+        for group_dir in expand_globs(group_dirs):
+            index_json_file = os.path.join(group_dir, 'index.json')
+            with open(index_json_file, 'r', encoding='utf-8') as f:
+                group = json.load(f)
+
+            google_search_file = os.path.join(group_dir, 'google-search.json')
+            with open(google_search_file, 'r', encoding='utf-8') as f:
+                google_results = json.load(f)
+            urls = [r['url'] for r in google_results if not is_personal_page(r['url'])][:3]
+
+            groups.append({
+                'institute': group.get('institute', ''),
+                'group': group.get('group', ''),
+                'advisor': group.get('advisor', ''),
+                'urls': '\n'.join(urls),
+            })
+
+            for group_file in expand_globs([f'{group_dir}\group-*.jsonl']):
+                with open(group_file, 'r', encoding='utf-8') as f:
+                    members = list(jsonl_load(f))
+
+                for member in members:
+                    try:
+                        candidates.append({
+                            'name': member.get('name', ''),
+                            'title': member.get('title', ''),
+                            'email': member.get('email', ''),
+                            'group': group.get('group', ''),
+                            'institute': group.get('institute', ''),
+                            'advisor': group.get('advisor', ''),
+                        })
+                    except Exception as e:
+                        logger.exception(f'fail to process {group_file}')
+                        logger.info(f'member: {member}')
+
+        group_df = pd.DataFrame(groups)
+        candidate_df = pd.DataFrame(candidates)
+
+        with pd.ExcelWriter(out_excel) as writer:
+            group_df.to_excel(writer, sheet_name='groups', index=False)
+            candidate_df.to_excel(writer, sheet_name='candidates', index=False)
 
 
     def google_search(self, keyword: str, debug=False):
@@ -287,7 +331,7 @@ class HunterCmd:
                                max_search=3, profile_url=None, parse=False):
         name = profile['name']
         institue = profile['institue']
-        key = f'{name}-{institue}'
+        key = formal_filename(f'{name}-{institue}')
 
         cv_dir = os.path.join(out_dir, key)
         os.makedirs(cv_dir, exist_ok=True)
@@ -358,12 +402,11 @@ class HunterCmd:
                 logger.info(f'answer: {answer}')
                 continue
 
-
     async def _async_search_group(self, group: pd.Series, out_dir, page: Page,
                                   max_search=3, parse=False):
         advisor = group['advisor']
         institute = group['institute']
-        key = f'{advisor}-{institute}'
+        key = formal_filename(f'{advisor}-{institute}')
 
         group_dir = os.path.join(out_dir, key)
         os.makedirs(group_dir, exist_ok=True)

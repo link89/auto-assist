@@ -131,3 +131,7 @@ def clean_html(markup):
         if tag.name in ['script', 'style', 'noscript', 'svg', 'img', 'iframe']:
             tag.decompose()
     return str(soup)
+
+
+def formal_filename(s):
+    return re.sub(r'[\\/:*?"<>|]', '_', s)
