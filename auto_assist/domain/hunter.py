@@ -14,8 +14,8 @@ import time
 import os
 
 from auto_assist.lib import (
-    url_to_filename, expand_globs, get_logger,
-    get_md_code_block, jsonl_load, jsonl_dump, dict_ignore_none)
+    url_to_filename, expand_globs, get_logger, ensure_dir,
+    get_md_code_block, jsonl_load, jsonl_dump, jsonl_loads, dict_ignore_none)
 from auto_assist.browser import launch_browser
 from auto_assist import config
 
@@ -76,7 +76,7 @@ class HunterCmd:
             filename = os.path.basename(in_file)
             out_file = os.path.join(out_dir, filename + '.md')
             logger.info(f'converting {in_file} to {out_file}')
-            sp.check_call(f'{self._pancdo_cmd} {self._pandoc_opt} {in_file} -o {out_file}', shell=True)
+            self.pandoc_convert(in_file, out_file)
 
     def clean_html(self, *html_files: str, out_dir = None):
         """
@@ -237,15 +237,14 @@ class HunterCmd:
             df.to_excel(f, index=False)
 
 
-    def search_team_members(self, in_excel, out_dir, max_search=3, max_tries=1, delay=1):
+    def search_group_members(self, in_excel, out_dir, max_search=3, max_tries=1, delay=1):
         """
-        Search team members from excel file
+        Search group members from excel file
 
         :param in_excel: str
             The input excel file that contains advisor and group information
         :param out_dir: str
         """
-
         df = self.load_excel(in_excel)
         async def _run():
             async with async_playwright() as pw:
@@ -256,9 +255,15 @@ class HunterCmd:
                 await page.unroute_all()
                 await page.route('**/*.{png,jpg,jpeg,webp,css,woff,woff2,ttf,svg}', lambda route: route.abort())
                 # search team members
-                for i, row in df.iterrows():
-                    ...
+                known_advisors = set()
 
+                for i, row in df.iterrows():
+                    advisor = row.get('advisor')
+                    if not isinstance(advisor, str) or not advisor or advisor.lower() in known_advisors:
+                        continue
+                    known_advisors.add(advisor.lower())
+                    institute = row['institute']
+                    await self._async_search_group(advisor, institute, out_dir, page, max_search=max_search)
 
         for _ in range(max_tries):
             try:
@@ -269,20 +274,78 @@ class HunterCmd:
                 logger.exception(f'fail to search team members')
                 time.sleep(delay)
 
-    async def _async_search_team(self, advisor, institute, out_dir, page: Page, max_search=3):
+    async def _async_search_group(self, advisor, institute, out_dir, page: Page, max_search=3):
         os.makedirs(out_dir, exist_ok=True)
         key = f'{advisor}-{institute}'
         # run google search
         gs_search_file = os.path.join(out_dir, key, 'google-search.json')
         search_keywords = f'{advisor} research group members people {institute}'
+        if not os.path.exists(gs_search_file):
+            gs_results = await self._async_google_search(search_keywords, page)
+            ensure_dir(gs_search_file)
+            with open(gs_search_file, 'w', encoding='utf-8') as f:
+                json.dump(gs_results, f, indent=2)
+        else:
+            with open(gs_search_file, 'r', encoding='utf-8') as f:
+                gs_results = json.load(f)
+
+        # retrive data from web page
+        urls = [r['url'] for r in gs_results][:max_search]
+        for url in urls:
+            filename = url_to_filename(url)
+            group_html_file = os.path.join(out_dir, key, f'group-{filename}')
+            ensure_dir(group_html_file)
+            group_md_file = group_html_file + '.md'
+            group_jsonl_file = group_md_file + '.jsonl'
+
+            if os.path.exists(group_jsonl_file):
+                continue
+
+            if not os.path.exists(group_html_file):
+                group_html = await self._async_scrape_url(url, page)
+                with open(group_html_file, 'w', encoding='utf-8') as f:
+                    f.write(group_html)
+            if not os.path.exists(group_md_file):
+                self.pandoc_convert(group_html_file, group_md_file)
+
+            # parse group members
+            with open(group_md_file, 'r', encoding='utf-8') as f:
+                group_md_content = f.read()
+            res = self._get_open_ai_response(
+                client=self._get_open_ai_client(),
+                prompt=prompt.RETRIVE_GROUP_MEMBERS,
+                text=group_md_content
+            )
+            answer = res.choices[0].message.content
+            try:
+                data = next(get_md_code_block(answer, '```json')).strip()
+                members = jsonl_loads(data)
+                for m in members:
+                    m['institute'] = institute
+                    m['advisor'] = advisor
+                    m['src'] = url
+                with open(group_jsonl_file, 'w', encoding='utf-8') as f:
+                    f.write(data)
+            except Exception as e:
+                logger.exception(f'fail to parse json data')
+                continue
 
 
+    def pandoc_convert(self, in_html, out_md):
+        """
+        Convert html to markdown
+
+        :param in_html: str
+            The input html file
+        :param out_md: str
+            The output markdown file
+        """
+        return sp.check_call(f'{self._pancdo_cmd} {self._pandoc_opt} "{in_html}" -o "{out_md}"', shell=True)
 
 
     async def _async_search_cv(self, name, institue, out_dir, page: Page, max_search=3, profile_url=None):
         os.makedirs(out_dir, exist_ok=True)
         key = f'{name}-{institue}'
-
         data_file = os.path.join(out_dir, f'final-{key}.json')
         if os.path.exists(data_file):
             with open(data_file, 'r', encoding='utf-8') as f:
@@ -314,7 +377,7 @@ class HunterCmd:
                     f.write(cv_html)
             cv_md_file = cv_html_file + '.md'
             if not os.path.exists(cv_md_file):
-                sp.check_call(f'{self._pancdo_cmd} {self._pandoc_opt} "{cv_html_file}" -o "{cv_md_file}"', shell=True)
+                self.pandoc_convert(cv_html_file, cv_md_file)
 
             cv_json_file = cv_md_file + '.json'
             if not os.path.exists(cv_json_file):

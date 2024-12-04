@@ -103,6 +103,14 @@ def jsonl_dump(fp, data):
     lines = [json.dumps(d) for d in data]
     fp.write('\n'.join(lines))
 
+def jsonl_loads(s):
+    return [json.loads(l) for l in s.strip().split('\n')]
 
 def dict_ignore_none(d):
     return {k: v for k, v in d.items() if v is not None}
+
+
+def ensure_dir(path):
+    d = os.path.dirname(path)
+    if d:
+        os.makedirs(d, exist_ok=True)
