@@ -14,7 +14,9 @@ import os
 
 from auto_assist.lib import (
     url_to_filename, expand_globs, get_logger, clean_html, formal_filename,
-    get_md_code_block, jsonl_load, jsonl_dump, jsonl_loads, dict_ignore_none)
+    get_md_code_block, jsonl_load, jsonl_dump, jsonl_loads, dict_ignore_none,
+    excel_autowidth,
+    )
 from auto_assist.browser import launch_browser
 from auto_assist import config
 
@@ -44,66 +46,11 @@ class HunterCmd:
         self._browser_dir = browser_dir
         self._openai_log = openai_log
 
-    def scrape_urls(self, excel_file: str, out_dir: str, col_name='FacultyPage'):
-        """
-        Scrape urls to html files
-
-        :param excel_file: str
-            The excel file that contains urls
-        :param out_dir: str
-            The output directory
-        :param col_name: str
-            The column name that contains urls
-        """
-        os.makedirs(out_dir, exist_ok=True)
-        with open(excel_file, 'rb') as f:
-            df = pd.read_excel(f)
-        urls = list(df[col_name])
-        asyncio.run(self._async_scrape_urls(urls, out_dir))
-
-    def convert_html_to_md(self, *html_files: str, out_dir: str):
-        """
-        Convert html files to markdown files with pandoc
-
-        :param html_files: list of str
-            The html files to convert
-        :param out_dir: str
-        """
-        in_files = expand_globs(html_files)
-        os.makedirs(out_dir, exist_ok=True)
-        for in_file in in_files:
-            filename = os.path.basename(in_file)
-            out_file = os.path.join(out_dir, filename + '.md')
-            logger.info(f'converting {in_file} to {out_file}')
-            self.pandoc_convert(in_file, out_file)
-
-    def clean_html(self, *html_files: str, out_dir = None):
-        """
-        Clean html files to reduce size
-
-        :param html_files: list of str
-            The html files to clean
-        :param out_dir: st
-            The output directory, if None, will overwrite the input files
-        """
-        if out_dir is not None:
-            os.makedirs(out_dir, exist_ok=True)
-        in_files = expand_globs(html_files)
-        for in_file in in_files:
-            filename = os.path.basename(in_file)
-            out_file = os.path.join(out_dir, filename) if out_dir else in_file
-            logger.info(f'cleaning {in_file} to {out_file}')
-            with open(in_file, 'r+', encoding='utf-8') as f:
-                cleaned = clean_html(f)
-                f.seek(0)
-                f.write(cleaned)
-
     def search_faculty_members(self, ):
         """
         """
 
-
-    def filter_professor_candidates(self, *jsonl_files, out_file, excel_file, col_name='FacultyPage'):
+    def process_faculties(self, *jsonl_files, out_file, excel_file, col_name='FacultyPage'):
         """
         filter candidates from jsonl files
 
@@ -257,6 +204,7 @@ class HunterCmd:
         groups = []
         candidates = []
 
+        known_names = set()
         for group_dir in expand_globs(group_dirs):
             index_json_file = os.path.join(group_dir, 'index.json')
             with open(index_json_file, 'r', encoding='utf-8') as f:
@@ -271,7 +219,7 @@ class HunterCmd:
                 'institute': group.get('institute', ''),
                 'group': group.get('group', ''),
                 'advisor': group.get('advisor', ''),
-                'urls': '\n'.join(urls),
+                'urls': '\r\n'.join(urls),
             })
 
             for group_file in expand_globs([f'{group_dir}\group-*.jsonl']):
@@ -280,13 +228,26 @@ class HunterCmd:
 
                 for member in members:
                     try:
+                        name = member.get('name', '')
+                        if name.lower() in known_names:
+                            continue
+                        known_names.add(name.lower())
+                        is_chinese = member.get('is_chinese', False)
+                        if not is_chinese:
+                            continue
+
+                        title = member.get('title', '')
+                        if not is_graduate(title):
+                            continue
+
                         candidates.append({
-                            'name': member.get('name', ''),
-                            'title': member.get('title', ''),
+                            'name': name,
+                            'title': title,
                             'email': member.get('email', ''),
                             'group': group.get('group', ''),
-                            'institute': group.get('institute', ''),
                             'advisor': group.get('advisor', ''),
+                            'institute': group.get('institute', ''),
+                            'description': member.get('description', ''),
                         })
                     except Exception as e:
                         logger.exception(f'fail to process {group_file}')
@@ -295,10 +256,13 @@ class HunterCmd:
         group_df = pd.DataFrame(groups)
         candidate_df = pd.DataFrame(candidates)
 
-        with pd.ExcelWriter(out_excel) as writer:
+        with pd.ExcelWriter(out_excel, engine_kwargs={'options':{'strings_to_urls': False}}) as writer:
+            writer.book.formats[0].set_text_wrap()  # type: ignore
             group_df.to_excel(writer, sheet_name='groups', index=False)
             candidate_df.to_excel(writer, sheet_name='candidates', index=False)
 
+            excel_autowidth(group_df, writer.sheets['groups'], max_width=150)
+            excel_autowidth(candidate_df, writer.sheets['candidates'], max_width=150)
 
     def google_search(self, keyword: str, debug=False):
         async def _run():
@@ -326,6 +290,43 @@ class HunterCmd:
             The output markdown file
         """
         return sp.check_call(f'{self._pancdo_cmd} {self._pandoc_opt} "{in_html}" -o "{out_md}"', shell=True)
+
+    def convert_html_to_md(self, *html_files: str, out_dir: str):
+        """
+        Convert html files to markdown files with pandoc
+
+        :param html_files: list of str
+            The html files to convert
+        :param out_dir: str
+        """
+        in_files = expand_globs(html_files)
+        os.makedirs(out_dir, exist_ok=True)
+        for in_file in in_files:
+            filename = os.path.basename(in_file)
+            out_file = os.path.join(out_dir, filename + '.md')
+            logger.info(f'converting {in_file} to {out_file}')
+            self.pandoc_convert(in_file, out_file)
+
+    def clean_html(self, *html_files: str, out_dir = None):
+        """
+        Clean html files to reduce size
+
+        :param html_files: list of str
+            The html files to clean
+        :param out_dir: st
+            The output directory, if None, will overwrite the input files
+        """
+        if out_dir is not None:
+            os.makedirs(out_dir, exist_ok=True)
+        in_files = expand_globs(html_files)
+        for in_file in in_files:
+            filename = os.path.basename(in_file)
+            out_file = os.path.join(out_dir, filename) if out_dir else in_file
+            logger.info(f'cleaning {in_file} to {out_file}')
+            with open(in_file, 'r+', encoding='utf-8') as f:
+                cleaned = clean_html(f)
+                f.seek(0)
+                f.write(cleaned)
 
     async def _async_search_cv(self, profile: pd.Series, out_dir, page: Page,
                                max_search=3, profile_url=None, parse=False):

@@ -135,3 +135,19 @@ def clean_html(markup):
 
 def formal_filename(s):
     return re.sub(r'[\\/:*?"<>|]', '_', s)
+
+
+def excel_autowidth(df, sheet, max_width=None):
+    def width(s):
+        s = s.strip()
+        if not s:
+            return 0
+        w = max([len(str(x)) for x in s.splitlines()])
+        if max_width is not None:
+            w = min(w, max_width)
+        return w
+
+    for idx, col in enumerate(df):
+        series = df[col]
+        max_len = max((series.astype(str).map(width).max(), len(str(series.name)))) + 1
+        sheet.set_column(idx, idx, max_len)
