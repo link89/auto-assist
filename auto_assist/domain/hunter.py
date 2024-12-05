@@ -370,12 +370,8 @@ class HunterCmd:
 
             if not os.path.exists(cv_html_file):
                 cv_html = await self._async_scrape_url(url, page)
-            else:
-                with open(cv_html_file, 'r', encoding='utf-8') as f:
-                    cv_html = f.read()
-            cv_html = clean_html(cv_html)
-            with open(cv_html_file, 'w', encoding='utf-8') as f:
-                f.write(cv_html)
+                with open(cv_html_file, 'w', encoding='utf-8') as f:
+                    f.write(cv_html)
 
             if not os.path.exists(cv_md_file):
                 self.pandoc_convert(cv_html_file, cv_md_file)
@@ -441,13 +437,8 @@ class HunterCmd:
 
             if not os.path.exists(group_html_file):
                 group_html = await self._async_scrape_url(url, page)
-            else:
-                with open(group_html_file, 'r', encoding='utf-8') as f:
-                    group_html = f.read()
-            # the reason to seperate clean and save is to avoid re-scraping when debugging
-            group_html = clean_html(group_html)
-            with open(group_html_file, 'w', encoding='utf-8') as f:
-                f.write(group_html)
+                with open(group_html_file, 'w', encoding='utf-8') as f:
+                    f.write(group_html)
 
             if not os.path.exists(group_md_file):
                 self.pandoc_convert(group_html_file, group_md_file)
