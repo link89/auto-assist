@@ -110,6 +110,11 @@ def jsonl_loads(s):
     return [json.loads(l) for l in s.strip().split('\n')]
 
 
+def json_load_file(path, encoding='utf-8'):
+    with open(path, encoding=encoding) as f:
+        return json.load(f)
+
+
 def dict_ignore_none(d):
     return {k: v for k, v in d.items() if v is not None}
 

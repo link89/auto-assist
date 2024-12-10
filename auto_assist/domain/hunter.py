@@ -13,11 +13,10 @@ import time
 import os
 
 from auto_assist.lib import (
-    url_to_key,
+    url_to_key, get_md_code_block,
     expand_globs, get_logger, clean_html, formal_filename,
-    get_md_code_block,
-    jsonl_load, jsonl_dump, jsonl_loads, dict_ignore_none,
-    excel_autowidth,
+    jsonl_load, jsonl_dump, jsonl_loads, json_load_file,
+    dict_ignore_none, excel_autowidth,
     )
 from auto_assist.browser import launch_browser
 from auto_assist import config
@@ -48,54 +47,66 @@ class HunterCmd:
         self._browser_dir = browser_dir
         self._openai_log = openai_log
 
-    def search_faculty_members(self, in_excel, out_dir, parse=False ):
+    def search_faculties(self, in_excel, out_dir, parse=False):
         """
-        """
+        Search faculty members from excel file
 
-    def process_faculties(self, *jsonl_files, out_file, excel_file, col_name='FacultyPage'):
+        :param in_excel: str
+            The input excel file that contains faculty information
+        :param out_dir: str
+            The output directory to save the faculty members
+        :param parse: bool
+            Whether to parse the faculty members
+        """
+        df = self.load_excel(in_excel)
+        async def _run():
+            async with async_playwright() as pw:
+                # setup browser
+                assert isinstance(self._browser_dir, str)
+                browser = await launch_browser(self._browser_dir)(pw)
+                page = browser.pages[0]
+                await page.route('**/*.{png,jpg,jpeg,webp,css,woff,woff2,ttf,svg}', lambda route: route.abort())
+                for i, row in df.iterrows():
+                    await self._async_search_faculty(row, out_dir, page, parse=parse)
+        asyncio.run(_run())
+
+    def process_faculties(self, *faculty_dirs, out_excel):
         """
         filter candidates from jsonl files
 
-        :param jsonl_files: list of str
-            The jsonl files that contains faculty members
-        :param out_file: str
-            The output file to save the candidates
-        :param excel_file: str
-            The excel file that contains urls
-        :param col_name: str
-            The column name that contains urls
+        :param faculty_dirs: list of str
+            The faculty directories that contains faculty members
+        :param out_excel: str
+            The output excel file to save the candidates
         """
-        with open(excel_file, 'rb') as f:
-            df = pd.read_excel(f)
         candidates = []
-        for jsonl_file in expand_globs(jsonl_files):
-            with open(jsonl_file, 'r', encoding='utf-8') as fp:
-                basename = os.path.basename(jsonl_file)
-                row = df[df[col_name].apply(
-                    lambda x: isinstance(x, str) and basename.startswith(url_to_key(x))
-                )]
-                for data in jsonl_load(fp):
-                    data = dict_ignore_none(data)
-                    faculty = FacultyMember(**data)
-                    if not row.empty:
-                        faculty.institute = row['Institute'].values[0]
-                        faculty.department = row['Department'].values[0]
-                        if not faculty.profile_url.startswith('http'):
-                            base_url: str = row[col_name].values[0]
-                            # remove query string from base url
-                            base_url = base_url.split('?', maxsplit=1)[0]
-                            if faculty.profile_url.startswith('/'):
-                                # remove path from base url
-                                base_url = base_url[:8] + base_url[8:].split('/', maxsplit=1)[0]
-                            faculty.profile_url = base_url + faculty.profile_url
-                    title = faculty.title.lower()
-                    if not title:
-                        logger.warning(f'title is empty for {faculty.name} in {jsonl_file}')
-                    if 'assist' in title and 'prof' in title:
-                        candidates.append(faculty.model_dump())
+        for faculty_dir in expand_globs(faculty_dirs):
+            index_json_file = os.path.join(faculty_dir, 'index.json')
+            index = json_load_file(index_json_file)
+            faculty_json_file = os.path.join(faculty_dir, 'faculty.html.md.jsonl')
+            with open(faculty_json_file, 'r', encoding='utf-8') as f:
+                faculties = list(jsonl_load(f))
+            base_url = index.get('FacultyPage', '')
+            base_url = base_url.split('?', maxsplit=1)[0]  # remove query string
+            assert isinstance(base_url, str), f'invalid base url: {base_url}'
+            for faculty in faculties:
+                faculty['src'] = index['FacultyPage']
+                faculty['institute'] = index.get('Institute', '')
+                faculty['department'] = index.get('Department', '')
+                profile_url = faculty.get('profile_url', '')
+                if profile_url and not profile_url.startswith('http'):
+                    _base_url = base_url
+                    if profile_url.startswith('/'):
+                        _base_url = base_url[:8] + base_url[8:].split('/', maxsplit=1)[0]
+                    faculty['profile_url'] = _base_url + profile_url
+                title = faculty.get('title', '').lower()
+                if not title:
+                    logger.warning(f'title is empty for {faculty["name"]} in {faculty_json_file}')
+                if ('assist' in title and 'prof' in title) or ('aprof' in title):
+                    candidates.append(faculty)
 
         df = pd.DataFrame(candidates)
-        with open(out_file, 'wb') as f:
+        with open(out_excel, 'wb') as f:
             df.to_excel(f, index=False)
 
     def search_cvs(self, in_excel, out_dir, max_search=3, max_tries=1, delay=1, parse=False):
@@ -106,7 +117,6 @@ class HunterCmd:
                 assert isinstance(self._browser_dir, str)
                 browser = await launch_browser(self._browser_dir)(pw)
                 page = browser.pages[0]
-                await page.unroute_all()
                 await page.route('**/*.{png,jpg,jpeg,webp,css,woff,woff2,ttf,svg}', lambda route: route.abort())
                 for i, row in df.iterrows():
                     await self._async_search_cv(row, out_dir, page,
@@ -120,7 +130,7 @@ class HunterCmd:
                 logger.exception(f'fail to search cvs')
                 time.sleep(delay)
 
-    def process_cvs(self, *json_files, out_file):
+    def process_cvs(self, *json_files, out_excel):
         """
         filter teams from json files
 
@@ -132,6 +142,7 @@ class HunterCmd:
 
         teams = []
         for json_file in expand_globs(json_files):
+            data = json_load_file(json_file)
             with open(json_file, 'r', encoding='utf-8') as fp:
                 data = json.load(fp)
             if not isinstance(data, list):
@@ -152,7 +163,7 @@ class HunterCmd:
                     if is_graduate(row['title']):
                         teams.append(row)
 
-        with open(out_file, 'wb') as f:
+        with open(out_excel, 'wb') as f:
             df = pd.DataFrame(teams)
             df.to_excel(f, index=False)
 
@@ -171,7 +182,6 @@ class HunterCmd:
                 assert isinstance(self._browser_dir, str)
                 browser = await launch_browser(self._browser_dir)(pw)
                 page = browser.pages[0]
-                await page.unroute_all()
                 await page.route('**/*.{png,jpg,jpeg,webp,css,woff,woff2,ttf,svg}',
                                  lambda route: route.abort())
                 # search team members
@@ -209,12 +219,9 @@ class HunterCmd:
         known_names = set()
         for group_dir in expand_globs(group_dirs):
             index_json_file = os.path.join(group_dir, 'index.json')
-            with open(index_json_file, 'r', encoding='utf-8') as f:
-                group = json.load(f)
-
+            group = json_load_file(index_json_file)
             google_search_file = os.path.join(group_dir, 'google-search.json')
-            with open(google_search_file, 'r', encoding='utf-8') as f:
-                google_results = json.load(f)
+            google_results = json_load_file(google_search_file)
             urls = [r['url'] for r in google_results if not is_personal_page(r['url'])][:3]
 
             groups.append({
@@ -272,7 +279,6 @@ class HunterCmd:
                 assert isinstance(self._browser_dir, str)
                 browser = await launch_browser(self._browser_dir)(pw)
                 page = browser.pages[0]
-                await page.unroute_all()
                 await page.route('**/*.{png,jpg,jpeg,webp,css,woff,woff2,ttf,svg}', lambda route: route.abort())
                 links = await self._async_google_search(keyword, page)
                 if debug:
@@ -337,7 +343,7 @@ class HunterCmd:
         url = faculty['FacultyPage']
         if not isinstance(url, str) or not url:
             return
-        key = url_to_key(url)
+        key = url_to_key(url, no_ext=True)
         faculty_dir = os.path.join(out_dir, key)
         os.makedirs(faculty_dir, exist_ok=True)
 
@@ -387,7 +393,6 @@ class HunterCmd:
             logger.exception(f'fail to parse json data: {faculty_md_file}')
             logger.info(f'answer: {answer}')
 
-
     async def _async_search_cv(self, profile: pd.Series, out_dir, page: Page,
                                max_search=3, profile_url=None, parse=False):
         name = profile['name']
@@ -410,8 +415,7 @@ class HunterCmd:
             with open(gs_result_file, 'w', encoding='utf-8') as f:
                 json.dump(gs_results, f, indent=2)
         else:
-            with open(gs_result_file, 'r', encoding='utf-8') as f:
-                gs_results = json.load(f)
+            gs_results = json_load_file(gs_result_file)
 
         # retrive data from web page
         urls = [r['url'] for r in gs_results if 'scholar.google' not in r['url']][:max_search]
@@ -482,8 +486,7 @@ class HunterCmd:
             with open(gs_search_file, 'w', encoding='utf-8') as f:
                 json.dump(gs_results, f, indent=2)
         else:
-            with open(gs_search_file, 'r', encoding='utf-8') as f:
-                gs_results = json.load(f)
+            gs_results = json_load_file(gs_search_file)
 
         # retrive data from web page
         urls = [r['url'] for r in gs_results if not is_personal_page(r['url'])][:max_search]
