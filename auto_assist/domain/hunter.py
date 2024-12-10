@@ -16,7 +16,7 @@ from auto_assist.lib import (
     url_to_key, get_md_code_block,
     expand_globs, get_logger, clean_html, formal_filename,
     jsonl_load, jsonl_dump, jsonl_loads, json_load_file,
-    dict_ignore_none, excel_autowidth,
+    excel_autowidth,
     )
 from auto_assist.browser import launch_browser
 from auto_assist import config
@@ -29,7 +29,7 @@ class HunterCmd:
 
     def __init__(self,
                  pandoc_cmd='pandoc',
-                 pandoc_opt='--sandbox -f html-native_divs-native_spans -t markdown',
+                 pandoc_opt='+RTS -M200m -RTS --sandbox -f html-native_divs-native_spans -t markdown',
                  openai_log='./openai-log.jsonl',
                  browser_dir=None,
                  proxy=None):
@@ -47,7 +47,7 @@ class HunterCmd:
         self._browser_dir = browser_dir
         self._openai_log = openai_log
 
-    def search_faculties(self, in_excel, out_dir, parse=False):
+    def search_faculties(self, in_excel, out_dir, parse=False, max_tries=3, delay=1):
         """
         Search faculty members from excel file
 
@@ -69,6 +69,15 @@ class HunterCmd:
                 for i, row in df.iterrows():
                     await self._async_search_faculty(row, out_dir, page, parse=parse)
         asyncio.run(_run())
+
+        for _ in range(max_tries):
+            try:
+                asyncio.run(_run())
+                logger.info('search faculties done')
+                break
+            except Exception as e:
+                logger.exception(f'fail to search faculties')
+                time.sleep(delay)
 
     def process_faculties(self, *faculty_dirs, out_excel):
         """
@@ -396,8 +405,8 @@ class HunterCmd:
     async def _async_search_cv(self, profile: pd.Series, out_dir, page: Page,
                                max_search=3, profile_url=None, parse=False):
         name = profile['name']
-        institue = profile['institue']
-        key = formal_filename(f'{name}-{institue}')
+        institute = profile['institute']
+        key = formal_filename(f'{name}-{institute}')
 
         cv_dir = os.path.join(out_dir, key)
         os.makedirs(cv_dir, exist_ok=True)
@@ -408,7 +417,7 @@ class HunterCmd:
 
         # run google search
         gs_result_file = os.path.join(cv_dir, f'google-search.json')
-        search_keyword = f'professor {name} {institue} (CV or resume or homepage or profile)'
+        search_keyword = f'professor {name} {institute} (CV or resume or homepage or profile)'
 
         if not os.path.exists(gs_result_file):
             gs_results = await self._async_google_search(search_keyword, page)
@@ -418,7 +427,7 @@ class HunterCmd:
             gs_results = json_load_file(gs_result_file)
 
         # retrive data from web page
-        urls = [r['url'] for r in gs_results if 'scholar.google' not in r['url']][:max_search]
+        urls = [r['url'] for r in gs_results if not exclude_cv(r['url'])][:max_search]
         if profile_url:
             urls.append(profile_url)
 
@@ -632,6 +641,12 @@ def is_graduate(title: str):
     if 'graduate' in title and 'under' not in title:
         return True
     return False
+
+
+def exclude_cv(url):
+    if url.endswith('.pdf'):
+        return True
+    return 'scholar.google' in url
 
 
 def is_personal_page(url):
