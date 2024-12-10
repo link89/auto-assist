@@ -13,8 +13,10 @@ import time
 import os
 
 from auto_assist.lib import (
-    url_to_filename, expand_globs, get_logger, clean_html, formal_filename,
-    get_md_code_block, jsonl_load, jsonl_dump, jsonl_loads, dict_ignore_none,
+    url_to_key,
+    expand_globs, get_logger, clean_html, formal_filename,
+    get_md_code_block,
+    jsonl_load, jsonl_dump, jsonl_loads, dict_ignore_none,
     excel_autowidth,
     )
 from auto_assist.browser import launch_browser
@@ -46,7 +48,7 @@ class HunterCmd:
         self._browser_dir = browser_dir
         self._openai_log = openai_log
 
-    def search_faculty_members(self, ):
+    def search_faculty_members(self, in_excel, out_dir, parse=False ):
         """
         """
 
@@ -70,7 +72,7 @@ class HunterCmd:
             with open(jsonl_file, 'r', encoding='utf-8') as fp:
                 basename = os.path.basename(jsonl_file)
                 row = df[df[col_name].apply(
-                    lambda x: isinstance(x, str) and basename.startswith(url_to_filename(x))
+                    lambda x: isinstance(x, str) and basename.startswith(url_to_key(x))
                 )]
                 for data in jsonl_load(fp):
                     data = dict_ignore_none(data)
@@ -328,6 +330,64 @@ class HunterCmd:
                 f.seek(0)
                 f.write(cleaned)
 
+    async def _async_search_faculty(self, faculty: pd.Series, out_dir, page: Page, parse=False):
+        """
+        Extract faculty member information from web page
+        """
+        url = faculty['FacultyPage']
+        if not isinstance(url, str) or not url:
+            return
+        key = url_to_key(url)
+        faculty_dir = os.path.join(out_dir, key)
+        os.makedirs(faculty_dir, exist_ok=True)
+
+        # dump index.json
+        index_file = os.path.join(faculty_dir, 'index.json')
+        with open(index_file, 'w', encoding='utf-8') as f:
+            f.write(faculty.to_json())
+
+        # scrape faculty page
+        faculty_html_file = os.path.join(faculty_dir, 'faculty.html')
+        faculty_md_file = faculty_html_file + '.md'
+        faculty_jsonl_file = faculty_md_file + '.jsonl'
+
+        if not os.path.exists(faculty_html_file):
+            html = await self._async_scrape_url(url, page)
+            html = clean_html(html, keep_alink=True)
+            with open(faculty_html_file, 'w', encoding='utf-8') as f:
+                f.write(html)
+
+        if not os.path.exists(faculty_md_file):
+            self.pandoc_convert(faculty_html_file, faculty_md_file)
+
+        # parse faculty page
+        if not parse or os.path.exists(faculty_jsonl_file):
+            return
+
+        with open(faculty_md_file, 'r', encoding='utf-8') as f:
+            faculty_md_content = f.read()
+
+        answer = ''
+        try:
+            res = self._get_open_ai_response(
+                client=self._get_open_ai_client(),
+                prompt=prompt.RETRIVE_FACULTY_MEMBERS,
+                text='\n'.join([
+                    'Markdown: """',
+                    faculty_md_content,
+                    '"""',
+                ])
+            )
+            answer = res.choices[0].message.content
+            data = next(get_md_code_block(answer, '```json')).strip()
+            obj = jsonl_loads(data)
+            with open(faculty_jsonl_file, 'w', encoding='utf-8') as f:
+                jsonl_dump(f, obj)
+        except Exception as e:
+            logger.exception(f'fail to parse json data: {faculty_md_file}')
+            logger.info(f'answer: {answer}')
+
+
     async def _async_search_cv(self, profile: pd.Series, out_dir, page: Page,
                                max_search=3, profile_url=None, parse=False):
         name = profile['name']
@@ -360,13 +420,10 @@ class HunterCmd:
 
         for url in urls:
             # scrape cv html
-            filename = url_to_filename(url)
+            filename = url_to_key(url)
             cv_html_file = os.path.join(cv_dir, f'cv-{filename}')
             cv_md_file = cv_html_file + '.md'
             cv_json_file = cv_md_file + '.json'
-
-            if os.path.exists(cv_json_file):
-                continue
 
             if not os.path.exists(cv_html_file):
                 cv_html = await self._async_scrape_url(url, page)
@@ -377,7 +434,7 @@ class HunterCmd:
                 self.pandoc_convert(cv_html_file, cv_md_file)
 
             # parse cv
-            if not parse:
+            if not parse or os.path.exists(cv_json_file):
                 continue
 
             with open(cv_md_file, 'r', encoding='utf-8') as f:
@@ -386,8 +443,12 @@ class HunterCmd:
             try:
                 res = self._get_open_ai_response(
                     client=self._get_open_ai_client(),
-                    prompt=prompt.SCHOLAR_OBJECT_SCHEMA,
-                    text=cv_md_content
+                    prompt=prompt.RETRIEVE_SCHOLAR_OBJECT,
+                    text='\n'.join([
+                        'Markdown: """',
+                        cv_md_content,
+                        '"""',
+                    ])
                 )
                 answer = res.choices[0].message.content
                 data = next(get_md_code_block(answer, '```json')).strip()
@@ -427,13 +488,10 @@ class HunterCmd:
         # retrive data from web page
         urls = [r['url'] for r in gs_results if not is_personal_page(r['url'])][:max_search]
         for url in urls:
-            filename = url_to_filename(url)
+            filename = url_to_key(url)
             group_html_file = os.path.join(group_dir, f'group-{filename}')
             group_md_file = group_html_file + '.md'
             group_jsonl_file = group_md_file + '.jsonl'
-
-            if os.path.exists(group_jsonl_file):
-                continue
 
             if not os.path.exists(group_html_file):
                 group_html = await self._async_scrape_url(url, page)
@@ -444,7 +502,7 @@ class HunterCmd:
                 self.pandoc_convert(group_html_file, group_md_file)
 
             # parse group members
-            if not parse:
+            if not parse or os.path.exists(group_jsonl_file):
                 continue
 
             with open(group_md_file, 'r', encoding='utf-8') as f:
@@ -455,7 +513,11 @@ class HunterCmd:
                 res = self._get_open_ai_response(
                     client=self._get_open_ai_client(),
                     prompt=prompt.RETRIVE_GROUP_MEMBERS,
-                    text=group_md_content
+                    text='\n'.join([
+                        'Markdown: """',
+                        group_md_content,
+                        '"""',
+                    ]),
                 )
                 answer = res.choices[0].message.content
                 data = next(get_md_code_block(answer, '```json')).strip()
@@ -510,7 +572,7 @@ class HunterCmd:
             # abort images, fonts, css and other media files
             await page.route('**/*.{png,jpg,jpeg,webp,css,woff,woff2,ttf,svg}', lambda route: route.abort())
             for url in urls:
-                filename = url_to_filename(url)
+                filename = url_to_key(url)
                 out_file = os.path.join(out_dir, filename)
                 if os.path.exists(out_file):
                     logger.info(f'skip {url} as {out_file} already exists')

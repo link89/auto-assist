@@ -33,7 +33,7 @@ def is_pinyin(word: str):
     return word.lower() in pinyin
 
 
-def url_to_filename(url: str, include_query=False):
+def url_to_key(url: str, include_query=False, no_ext=False):
     """
     Convert url to a valid filename
 
@@ -45,7 +45,7 @@ def url_to_filename(url: str, include_query=False):
     if include_query:
         filename += parsed.query
     # if filename not have extension, add .html
-    if not os.path.splitext(filename)[1]:
+    if not os.path.splitext(filename)[1] and not no_ext:
         filename += '.html'
     return parsed.netloc + filename
 
@@ -120,14 +120,14 @@ def ensure_dir(path):
         os.makedirs(d, exist_ok=True)
 
 
-def clean_html(markup):
+def clean_html(markup, keep_alink=False):
     soup = BeautifulSoup(markup, 'html.parser')
     for tag in soup():
         attrs = tag.attrs.copy() if tag.attrs else []
         for attr in attrs:
+            if keep_alink and tag.name == 'a' and attr == 'href':
+                continue
             del tag[attr]
-
-
         if tag.name in ['script', 'style', 'noscript', 'svg', 'img', 'iframe']:
             tag.decompose()
     return str(soup)

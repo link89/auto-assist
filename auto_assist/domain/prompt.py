@@ -12,18 +12,19 @@ interface FaucultyMember {
 }
 ```
 
-You must serialize every racultyMember object you find in the markdown file to a single line of json object, aka jsonl format,
+You must serialize every raculty Member object you find in the markdown file to a single line of json object, aka jsonl format,
 and put them in a json block, for example:
 ```json
 {"name":"Alice","title":"Associate Professor","profile_url":"https://example.org/alice"}
 {"name":"Bob","title":"Professor","profile_url":"https://example.org/bob"}
 ```
 Note that the data in example above is not real, you should replace them with the real data you find.
-You should try to find as much information as possible for each faculty member, but if you can't find some information, just leave them empty.
+You should try to find as much information as possible for each faculty members, but if you can't find some information, just leave them empty.
+Note that the data in json block is in jsonl format, which means each line is a json object, and there is no comma between objects. It's not a json array.
 """.strip()
 
 
-SCHOLAR_OBJECT_SCHEMA = """
+RETRIEVE_SCHOLAR_OBJECT = """
 You job is to retrive information of a scholar object from a markdown file.
 
 The markdown file is a resumes or profile of a scholar.
