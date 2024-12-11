@@ -234,7 +234,7 @@ class HunterCmd:
             group = json_load_file(index_json_file)
             google_search_file = os.path.join(group_dir, 'google-search.json')
             google_results = json_load_file(google_search_file)
-            urls = [r['url'] for r in google_results if not is_personal_page(r['url'])][:3]
+            urls = [r['url'] for r in google_results if valid_group_url(r['url'])][:3]
 
             groups.append({
                 'institute': group.get('institute', ''),
@@ -429,7 +429,7 @@ class HunterCmd:
             gs_results = json_load_file(gs_result_file)
 
         # retrive data from web page
-        urls = [r['url'] for r in gs_results if not exclude_cv(r['url'])][:max_search]
+        urls = [r['url'] for r in gs_results if valid_cv_url(r['url'])][:max_search]
         if profile_url:
             urls.append(profile_url)
 
@@ -657,10 +657,20 @@ def is_graduate(title: str):
     return False
 
 
-def exclude_cv(url):
+def valid_cv_url(url):
     if url.endswith('.pdf'):
-        return True
-    return 'scholar.google' in url
+        return False
+    if 'scholar.google' in url:
+        return False
+    return True
+
+
+def valid_group_url(url):
+    if url.endswith('.pdf'):
+        return False
+    if is_personal_page(url):
+        return False
+    return True
 
 
 def is_personal_page(url):
