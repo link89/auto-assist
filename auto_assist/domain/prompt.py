@@ -4,13 +4,13 @@ The markdown file will contain multiple faculty members.
 
 A faculty member object can be defined as the following TypeScript interface:
 ```typescript
-interface FaucultyMember {
+interface Fauculty {
     name: string;
-    title?: string;  // the title of the faculty member, e.g. Professor, Associate Professor, Prof, Enginner, etc. You can infer this from the name or other information if it is not explicitly mentioned.
+    title?: string;  // the title of the faculty member, e.g. Professor, Associate Professor, Prof, Enginner, etc. You can infer this from the name or your own knowledge about this person if it is not explicitly mentioned. The title must be as elaborate as possible, e.g. use "Associate Professor" instead of "Professor".
     profile_url?: string; // the url to the detailed profile of the faculty member
 }
 ```
-You must serialize every raculty Member object you find in the markdown file to a single line of json object, aka jsonl format,
+You must serialize every Faculty object you find in the markdown file to a single line of json object, aka jsonl format,
 and put them in a json block, for example:
 ```json
 {"name":"Alice","title":"Associate Professor","profile_url":"https://example.org/alice"}
@@ -18,7 +18,7 @@ and put them in a json block, for example:
 ```
 Note that the data in example above is not real, you should replace them with the real data you find.
 You should try to find as much information as possible for each faculty members, but if you can't find some information, just leave them empty. Never ever use any fake data like "Unknown University", "No Email", "John Doe", etc.
-Note that you can infer the title of the faculty member from the name or other information if it is not explicitly mentioned.
+Note that you can infer the title of the faculty member from the name or your own kownledge about this person if it is not explicitly mentioned.
 Note that the data in json block is in jsonl format, which means each line is a json object, and there is no comma between objects. It's not a json array.
 """.strip()
 

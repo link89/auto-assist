@@ -8,6 +8,7 @@ import pandas as pd
 import subprocess as sp
 import requests
 import asyncio
+import random
 import json
 import time
 import os
@@ -439,6 +440,7 @@ class HunterCmd:
 
             if not os.path.exists(cv_html_file):
                 cv_html = await self._async_scrape_url(url, page)
+                cv_html = clean_html(cv_html)
                 with open(cv_html_file, 'w', encoding='utf-8') as f:
                     f.write(cv_html)
 
@@ -543,16 +545,24 @@ class HunterCmd:
                 continue
 
     async def _async_google_search(self, keyword: str, page: Page):
-        await page.goto('https://www.google.com')
+        await page.goto('https://www.google.com/ncr')
+        # add some random delay and mouse move to avoid bot detection
+        random_xy_seq = [(random.uniform(100, 500), random.uniform(100, 500))
+                         for _ in range(random.randint(3, 5))]
+        for x, y in random_xy_seq:
+            await page.mouse.move(x, y)
+            await asyncio.sleep(random.uniform(0.1, 0.2))
+        await page.click('textarea[name="q"]')
         await page.fill('textarea[name="q"]', keyword)
         await page.press('textarea[name="q"]', 'Enter')
         await page.wait_for_selector('div#search div.g[jscontroller][jsaction]')
-        return await page.evaluate(
+        result = await page.evaluate(
             '''() => Array.from(document.querySelectorAll('div#search div.g[jscontroller][jsaction]')).map(e => ({
             title: e.querySelector('h3')?.innerText,
             url: e.querySelector('a')?.href,
             snippet: e.querySelector('span')?.innerText
         }))''')
+        return result
 
     def _requests_get(self, url):
         user_agent = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0.0.0 Safari/537.36 Edg/130.0.0.0 '
