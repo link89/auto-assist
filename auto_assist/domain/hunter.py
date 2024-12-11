@@ -582,6 +582,8 @@ class HunterCmd:
         await page.wait_for_load_state('domcontentloaded')
         if delay > 0:
             await asyncio.sleep(delay)
+        if 'linkedin' in url:
+            await asyncio.sleep(5)  # wait for linkedin to load
         # if there is cloudflare protection, try to solve it
         # detect cloudflare protection
         title = await page.title()
