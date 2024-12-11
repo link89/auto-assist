@@ -13,10 +13,10 @@ import time
 import os
 
 from auto_assist.lib import (
-    url_to_key, get_md_code_block,
+    url_to_key, get_md_code_block, excel_autowidth,
     expand_globs, get_logger, clean_html, formal_filename,
-    jsonl_load, jsonl_dump, jsonl_loads, json_load_file,
-    excel_autowidth,
+    jsonl_load, jsonl_dump, jsonl_loads,
+    json_load_file, json_dump_file,
     )
 from auto_assist.browser import launch_browser
 from auto_assist import config
@@ -421,8 +421,7 @@ class HunterCmd:
 
         if not os.path.exists(gs_result_file):
             gs_results = await self._async_google_search(search_keyword, page)
-            with open(gs_result_file, 'w', encoding='utf-8') as f:
-                json.dump(gs_results, f, indent=2)
+            json_dump_file(gs_results, gs_result_file)
         else:
             gs_results = json_load_file(gs_result_file)
 
@@ -466,8 +465,7 @@ class HunterCmd:
                 answer = res.choices[0].message.content
                 data = next(get_md_code_block(answer, '```json')).strip()
                 obj = json.loads(data)
-                with open(cv_json_file, 'w', encoding='utf-8') as f:
-                    json.dump(obj, f, indent=2)
+                json_dump_file(obj, cv_json_file)
             except Exception as e:
                 logger.exception(f'fail to parse json data: {cv_md_file}')
                 logger.info(f'answer: {answer}')
@@ -492,8 +490,7 @@ class HunterCmd:
         search_keywords = f'(research group of {advisor}) AND (members or people) AND (graduate or phd or postdoctoral) {institute}'
         if not os.path.exists(gs_search_file):
             gs_results = await self._async_google_search(search_keywords, page)
-            with open(gs_search_file, 'w', encoding='utf-8') as f:
-                json.dump(gs_results, f, indent=2)
+            json_dump_file(gs_results, gs_search_file)
         else:
             gs_results = json_load_file(gs_search_file)
 

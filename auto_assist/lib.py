@@ -101,8 +101,8 @@ def jsonl_load(fp):
         yield json.loads(l)
 
 
-def jsonl_dump(fp, data):
-    lines = [json.dumps(d) for d in data]
+def jsonl_dump(fp, data, ensure_ascii=False):
+    lines = [json.dumps(d, ensure_ascii=ensure_ascii) for d in data]
     fp.write('\n'.join(lines))
 
 
@@ -113,6 +113,11 @@ def jsonl_loads(s):
 def json_load_file(path, encoding='utf-8'):
     with open(path, encoding=encoding) as f:
         return json.load(f)
+
+
+def json_dump_file(data, path, encoding='utf-8', ensure_ascii=False):
+    with open(path, 'w', encoding=encoding) as f:
+        json.dump(data, f, ensure_ascii=ensure_ascii, indent=2)
 
 
 def dict_ignore_none(d):
