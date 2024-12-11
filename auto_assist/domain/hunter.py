@@ -1,7 +1,5 @@
 from playwright.async_api import async_playwright, Page
 from openai import OpenAI
-from pydantic import BaseModel
-from typing import List
 from pprint import pprint
 
 import pandas as pd
@@ -592,26 +590,6 @@ class HunterCmd:
         content = await page.content()
         return content
 
-    async def _async_scrape_urls(self, urls: List[str], out_dir: str):
-        async with async_playwright() as pw:
-            assert isinstance(self._browser_dir, str)
-            browser = await launch_browser(self._browser_dir)(pw)
-            page = browser.pages[0]
-            # abort images, fonts, css and other media files
-            await page.route('**/*.{png,jpg,jpeg,webp,css,woff,woff2,ttf,svg}', lambda route: route.abort())
-            for url in urls:
-                filename = url_to_key(url)
-                out_file = os.path.join(out_dir, filename)
-                if os.path.exists(out_file):
-                    logger.info(f'skip {url} as {out_file} already exists')
-                    continue
-                logger.info(f'scraping {url}')
-                await page.goto(url)
-                await page.wait_for_load_state('domcontentloaded')
-                await asyncio.sleep(1)
-                with open(out_file, 'w', encoding='utf-8') as f:
-                    f.write(await page.content())
-
     def _get_open_ai_client(self):
         base_url = config.get('openai_base_url')
         api_key = config.get('openai_api_key')
@@ -637,16 +615,6 @@ class HunterCmd:
         import pandas as pd
         with open(excel_file, 'rb') as f:
             return pd.read_excel(f)
-
-
-class FacultyMember(BaseModel):
-    name: str
-    title: str = ''
-    email: str = ''
-    introduction: str = ''
-    institute: str = ''
-    department: str = ''
-    profile_url: str = ''
 
 
 def is_graduate(title: str):
