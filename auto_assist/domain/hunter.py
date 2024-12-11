@@ -140,42 +140,44 @@ class HunterCmd:
                 logger.exception(f'fail to search cvs')
                 time.sleep(delay)
 
-    def process_cvs(self, *json_files, out_excel):
+    def process_cvs(self, *cv_dirs, out_excel):
         """
         filter teams from json files
 
-        :param json_files: list of str
-            The json files that contains cv data
+        :param cv_dirs: list of str
+            The cv directories that contains cv information
         :param out_file: str
             The output file in excel format to save the teams
         """
+        groups = []
 
-        teams = []
-        for json_file in expand_globs(json_files):
-            data = json_load_file(json_file)
-            with open(json_file, 'r', encoding='utf-8') as fp:
-                data = json.load(fp)
-            if not isinstance(data, list):
-                data = [data]
-
-            for cv in data:
-                member = cv['name']
+        for cv_dir in expand_globs(cv_dirs):
+            cv_file_pattern = os.path.join(cv_dir, 'cv-*.json')
+            for cv_file in expand_globs([cv_file_pattern]):
+                cv = json_load_file(cv_file)
+                member = cv.get('name', '')
+                if not member:
+                    continue
                 email = cv.get('email', '')
                 for exp in cv.get('experiences', []):
-                    row = {
+                    advisor = exp.get('advisor', '')
+                    if not advisor:
+                        continue
+                    group = {
                         'member': member,
                         'email': email,
                         'title': exp.get('title', ''),
                         'institute': exp.get('institute', ''),
                         'group': exp.get('group', ''),
-                        'advisor': exp.get('advisor', ''),
+                        'advisor': advisor,
                     }
-                    if is_graduate(row['title']):
-                        teams.append(row)
+                    groups.append(group)
 
         with open(out_excel, 'wb') as f:
-            df = pd.DataFrame(teams)
-            df.to_excel(f, index=False)
+            df = pd.DataFrame(groups)
+            with pd.ExcelWriter(f, engine_kwargs={'options': {'strings_to_urls': False}}) as writer:
+                df.to_excel(writer, sheet_name='groups', index=False)
+                excel_autowidth(df, writer.sheets['groups'], max_width=150)
 
     def search_group_members(self, in_excel, out_dir, max_search=3, max_tries=1, delay=1, parse=False):
         """
