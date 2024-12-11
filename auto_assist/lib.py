@@ -130,16 +130,13 @@ def ensure_dir(path):
         os.makedirs(d, exist_ok=True)
 
 
-def clean_html(markup, keep_alink=False):
+def clean_html(markup, keep_attrs=False):
     soup = BeautifulSoup(markup, 'html.parser')
     for tag in soup():
         attrs = tag.attrs.copy() if tag.attrs else []
-        for attr in attrs:
-            if keep_alink and tag.name == 'a' and attr == 'href':
-                continue
-            if tag.name in ['meta']:
-                continue
-            del tag[attr]
+        if not keep_attrs or tag.name not in ['meta']:
+            for attr in attrs:
+                del tag[attr]
         if tag.name in ['script', 'style', 'noscript', 'svg', 'img', 'iframe', 'code']:
             tag.decompose()
     return str(soup)

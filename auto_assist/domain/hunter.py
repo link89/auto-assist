@@ -30,7 +30,7 @@ class HunterCmd:
 
     def __init__(self,
                  pandoc_cmd='pandoc',
-                 pandoc_opt='+RTS -M200m -RTS --sandbox -f html-native_divs-native_spans -t markdown',
+                 pandoc_opt='+RTS -M1024m -RTS --sandbox -f html-native_divs-native_spans -t markdown',
                  openai_log='./openai-log.jsonl',
                  browser_dir=None,
                  proxy=None):
@@ -371,7 +371,7 @@ class HunterCmd:
 
         if not os.path.exists(faculty_html_file):
             html = await self._async_scrape_url(url, page)
-            html = clean_html(html, keep_alink=True)
+            html = clean_html(html, keep_attrs=True)
             with open(faculty_html_file, 'w', encoding='utf-8') as f:
                 f.write(html)
 
@@ -498,8 +498,9 @@ class HunterCmd:
         else:
             gs_results = json_load_file(gs_search_file)
 
-        # retrive data from web page
-        urls = [r['url'] for r in gs_results if not is_personal_page(r['url'])][:max_search]
+        # sort the results by if member in the title or snippet
+        gs_results = sorted(gs_results, reverse=True, key=score_group_search)
+        urls = [r['url'] for r in gs_results if valid_group_url(r['url'])][:max_search]
         for url in urls:
             filename = url_to_key(url)
             group_html_file = os.path.join(group_dir, f'group-{filename}')
@@ -508,6 +509,7 @@ class HunterCmd:
 
             if not os.path.exists(group_html_file):
                 group_html = await self._async_scrape_url(url, page)
+                group_html = clean_html(group_html)
                 with open(group_html_file, 'w', encoding='utf-8') as f:
                     f.write(group_html)
 
@@ -658,7 +660,7 @@ def is_graduate(title: str):
 
 
 def valid_cv_url(url):
-    if url.endswith('.pdf'):
+    if '.pdf' in url:
         return False
     if 'scholar.google' in url:
         return False
@@ -666,17 +668,35 @@ def valid_cv_url(url):
 
 
 def valid_group_url(url):
-    if url.endswith('.pdf'):
+    if '.pdf' in url:
         return False
     if is_personal_page(url):
         return False
     return True
 
 
+def score_group_search(result):
+    """
+    Score the search result for filtering group members
+    Tuning this have a big impact on the finial result
+    """
+    title = result['title'].lower()
+    snippet = result['snippet'].lower()
+    if 'member' in title or 'member' in snippet:
+        return 10
+    if 'graduate' in title or 'graduate' in snippet:
+        return 7
+    if 'people' in title or 'people' in snippet:
+        return 5
+    if 'profile' in title or 'profile' in snippet:
+        return -5
+    return 0
+
+
 def is_personal_page(url):
     kws = [
         'linkedin', 'researchgate', 'scholar.google', 'wikipedia',
         'youtube', 'reddit', 'twitter', 'x.com', 'facebook', 'instagram',
-        'github', 'gitlab', 'bitbucket', 'slides',
+        'github', 'gitlab', 'bitbucket', 'slides', 'frontiersin',
     ]
     return any(kw in url for kw in kws)
