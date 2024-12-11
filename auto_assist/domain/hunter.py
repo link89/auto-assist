@@ -580,6 +580,11 @@ class HunterCmd:
         await page.wait_for_load_state('domcontentloaded')
         if delay > 0:
             await asyncio.sleep(delay)
+        # if there is cloudflare protection, try to solve it
+        # detect cloudflare protection
+        title = await page.title()
+        if 'just a moment' in title.lower():
+            await asyncio.sleep(10)
         content = await page.content()
         return content
 
