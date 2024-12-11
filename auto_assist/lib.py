@@ -137,8 +137,10 @@ def clean_html(markup, keep_alink=False):
         for attr in attrs:
             if keep_alink and tag.name == 'a' and attr == 'href':
                 continue
+            if tag.name in ['meta']:
+                continue
             del tag[attr]
-        if tag.name in ['script', 'style', 'noscript', 'svg', 'img', 'iframe']:
+        if tag.name in ['script', 'style', 'noscript', 'svg', 'img', 'iframe', 'code']:
             tag.decompose()
     return str(soup)
 
