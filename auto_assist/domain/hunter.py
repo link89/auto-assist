@@ -16,6 +16,7 @@ from auto_assist.lib import (
     expand_globs, get_logger, clean_html, formal_filename,
     jsonl_load, jsonl_dump, jsonl_loads,
     json_load_file, json_dump_file,
+    is_chinese_name,
     )
 from auto_assist.browser import launch_browser
 from auto_assist import config
@@ -251,20 +252,23 @@ class HunterCmd:
                         if name.lower() in known_names:
                             continue
                         known_names.add(name.lower())
+                        # is chinese name is decided by LLM, double check is required
                         is_chinese = member.get('is_chinese', False)
                         if not is_chinese:
+                            # double check if the name is chinese
+                            is_chinese = is_chinese_name(name)
+                        if not is_chinese:
                             continue
-
                         title = member.get('title', '')
-                        if not is_graduate(title):
+                        # filter out non-graduate students, if title is empty also keep it
+                        if title and not is_graduate(title):
                             continue
-
                         candidates.append({
                             'name': name,
                             'title': title,
                             'email': member.get('email', ''),
-                            'group': group.get('group', ''),
                             'advisor': group.get('advisor', ''),
+                            'group': group.get('group', ''),
                             'institute': group.get('institute', ''),
                             'description': member.get('description', ''),
                         })
@@ -279,7 +283,6 @@ class HunterCmd:
             writer.book.formats[0].set_text_wrap()  # type: ignore
             group_df.to_excel(writer, sheet_name='groups', index=False)
             candidate_df.to_excel(writer, sheet_name='candidates', index=False)
-
             excel_autowidth(group_df, writer.sheets['groups'], max_width=150)
             excel_autowidth(candidate_df, writer.sheets['candidates'], max_width=150)
 
@@ -670,3 +673,13 @@ def is_personal_page(url):
         'github', 'gitlab', 'bitbucket', 'slides', 'frontiersin',
     ]
     return any(kw in url for kw in kws)
+
+
+def get_linkedin_gs(google_result):
+    ret = {}
+    for r in google_result:
+        if 'linkedin' in r['url']:
+            ret['linkedin'] = r['url']
+        elif 'scholar.google' in r['url']:
+            ret['google_scholar'] = r['url']
+    return ret
