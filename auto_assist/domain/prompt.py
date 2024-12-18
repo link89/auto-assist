@@ -24,9 +24,9 @@ Note that the data in json block is in jsonl format, which means each line is a 
 
 
 RETRIEVE_SCHOLAR_OBJECT = """
-You job is to retrive information of a scholar object from a markdown file.
+Your job is to retrive information of a scholar object from a markdown file.
 
-The markdown file is a resumes or profile of a scholar.
+The markdown file is a resume or profile of a scholar.
 You need to extract information from the markdown file and build a Scholar object from what you find.
 
 The definition of the Scholar object is as follows:
