@@ -289,6 +289,8 @@ class HunterCmd:
     def search_students(self, in_excel, out_dir, max_search=3, max_tries=1,
                         delay=1, parse=False, sheet_name='candidates', limit=0):
         df = self.load_excel(in_excel, sheet_name=sheet_name)
+        # sort df by title so that we can put missing title to the end
+        df = df.sort_values('title', na_position='last')
         async def _run():
             async with async_playwright() as pw:
                 # setup browser
@@ -309,6 +311,22 @@ class HunterCmd:
             except Exception as e:
                 logger.exception(f'fail to search students')
                 time.sleep(delay)
+
+    def process_students(self, *student_dirs, out_json):
+        students = []
+        for student_dir in expand_globs(student_dirs):
+            index_json_file = os.path.join(student_dir, 'index.json')
+            index = json_load_file(index_json_file)
+            # search the json file of students
+            student_json_files = expand_globs([f'{student_dir}\cv-*.md.json'])
+            # choose the largest file to process
+            # TODO: optimize this, for example, merge the json files
+            student_json_files = sorted(student_json_files, key=lambda f: os.path.getsize(f), reverse=True)
+            student_json_file = student_json_files[0]
+            with open(student_json_file, 'r', encoding='utf-8') as f:
+                student = json_load_file(f)
+                students.append(student)
+        json_dump_file(students, out_json)
 
     def google_search(self, keyword: str, debug=False):
         async def _run():
@@ -572,7 +590,6 @@ class HunterCmd:
                 logger.exception(f'fail to parse json data: {cv_md_file}')
                 logger.info(f'answer: {answer}')
                 continue
-
 
     async def _async_search_group(self, group: pd.Series, out_dir, page: Page,
                                   max_search=3, parse=False):
