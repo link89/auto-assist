@@ -286,6 +286,29 @@ class HunterCmd:
             excel_autowidth(group_df, writer.sheets['groups'], max_width=150)
             excel_autowidth(candidate_df, writer.sheets['candidates'], max_width=150)
 
+    def search_students(self, in_excel, out_dir, max_search=3, max_tries=1,
+                        delay=1, parse=False, sheet_name='candidates', limit=0):
+        df = self.load_excel(in_excel, sheet_name=sheet_name)
+        async def _run():
+            async with async_playwright() as pw:
+                # setup browser
+                assert isinstance(self._browser_dir, str)
+                browser = await launch_browser(self._browser_dir)(pw)
+                page = browser.pages[0]
+                await page.route('**/*.{png,jpg,jpeg,webp,css,woff,woff2,ttf,svg}', lambda route: route.abort())
+                for i, (_, row) in enumerate(df.iterrows()):
+                    if limit > 0 and i >= limit:
+                        break
+                    await self._async_search_student(row, out_dir, page,
+                                                     max_search=max_search, parse=parse)
+        for _ in range(max_tries):
+            try:
+                asyncio.run(_run())
+                logger.info('search students done')
+                break
+            except Exception as e:
+                logger.exception(f'fail to search students')
+                time.sleep(delay)
 
     def google_search(self, keyword: str, debug=False):
         async def _run():
@@ -477,21 +500,21 @@ class HunterCmd:
                 logger.info(f'answer: {answer}')
                 continue
 
-    async def _async_search_candidate(self, profile: pd.Series, out_dir, page: Page,
-                                      max_search=3, profile_url=None, parse=False):
+    async def _async_search_student(self, profile: pd.Series, out_dir, page: Page,
+                                    max_search=3, profile_url=None, parse=False):
         name = profile['name']
         institute = profile['institute']
         key = formal_filename(f'{name}-{institute}')
 
-        candidate_dir = os.path.join(out_dir, key)
-        os.makedirs(candidate_dir, exist_ok=True)
+        student_dir = os.path.join(out_dir, key)
+        os.makedirs(student_dir, exist_ok=True)
         # dump index.json
-        index_file = os.path.join(candidate_dir, 'index.json')
+        index_file = os.path.join(student_dir, 'index.json')
         with open(index_file, 'w', encoding='utf-8') as f:
             f.write(profile.to_json())
         # run google search
-        gs_result_file = os.path.join(candidate_dir, f'google-search.json')
-        search_keyword = f'{name} {institute} (CV or resume or homepage or profile or linkedin or google scholor)'
+        gs_result_file = os.path.join(student_dir, f'google-search.json')
+        search_keyword = f'{name} from {institute}'
 
         if not os.path.exists(gs_result_file):
             gs_results = await self._async_google_search(search_keyword, page)
@@ -500,14 +523,15 @@ class HunterCmd:
             gs_results = json_load_file(gs_result_file)
 
         # retrive data from web page
-        urls = [r['url'] for r in gs_results if valid_cv_url(r['url'])][:max_search]
+        urls = [r['url'] for r in gs_results if valid_student_url(r['url'])][:max_search]
         if profile_url:
             urls.append(profile_url)
 
+        gs_linkedin = get_linkedin_gs(gs_results)
         for url in urls:
             # scrape cv html
             filename = url_to_key(url)
-            cv_html_file = os.path.join(candidate_dir, f'cv-{filename}')
+            cv_html_file = os.path.join(student_dir, f'cv-{filename}')
             cv_md_file = cv_html_file + '.md'
             cv_json_file = cv_md_file + '.json'
 
@@ -530,8 +554,9 @@ class HunterCmd:
             try:
                 res = self._get_open_ai_response(
                     client=self._get_open_ai_client(),
-                    prompt=prompt.RETRIEVE_SCHOLAR_OBJECT,
+                    prompt=prompt.RETRIEVE_STUDENT_OBJECT,
                     text='\n'.join([
+                        f'The below is a markdown file related to {name}',
                         'Markdown: """',
                         cv_md_content,
                         '"""',
@@ -540,6 +565,8 @@ class HunterCmd:
                 answer = res.choices[0].message.content
                 data = next(get_md_code_block(answer, '```json')).strip()
                 obj = json.loads(data)
+                obj['src'] = url
+                obj.update(gs_linkedin)
                 json_dump_file(obj, cv_json_file)
             except Exception as e:
                 logger.exception(f'fail to parse json data: {cv_md_file}')
@@ -687,10 +714,10 @@ class HunterCmd:
             json.dump(res.model_dump(), f)
         return res
 
-    def load_excel(self, excel_file):
+    def load_excel(self, excel_file, sheet_name=None) -> pd.DataFrame:
         import pandas as pd
         with open(excel_file, 'rb') as f:
-            return pd.read_excel(f)
+            return pd.read_excel(f, sheet_name=sheet_name)  # type: ignore
 
 
 def is_graduate(title: str):
@@ -707,6 +734,12 @@ def valid_cv_url(url):
     if '.pdf' in url:
         return False
     if 'scholar.google' in url:
+        return False
+    return True
+
+
+def valid_student_url(url):
+    if '.pdf' in url:
         return False
     return True
 
@@ -748,9 +781,10 @@ def is_personal_page(url):
 
 def get_linkedin_gs(google_result):
     ret = {}
+    # only get the first linkedin and google scholar
     for r in google_result:
-        if 'linkedin' in r['url']:
+        if 'linkedin' in r['url'] and 'linkedin' not in ret:
             ret['linkedin'] = r['url']
-        elif 'scholar.google' in r['url']:
+        elif 'scholar.google' in r['url'] and 'google_scholar' not in ret:
             ret['google_scholar'] = r['url']
     return ret

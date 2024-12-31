@@ -126,14 +126,22 @@ interface Experience {
 interface Student {
     name: string;
     title?: string;  // current title or degree of the student, e.g. Bachelor, Master, PhD, Postdoc, etc.
+    birth_year?: number;  // the birth year of the student, e.g 1995
+    age?: number;  // the age of the student, e.g. 26
     email?: string;
-    goolge_scholar_url?: string; // the url to the google scholar profile of the student
     introduction?: string; // a brief introduction of the student, you can summarize it if it is too long
-    research_domain: string;
     experiences?: Experience[]; // a list of education experiences of the student
+    research_domain: string; // the research_domain of the student, should be selected from the following list:
+                             // 人工智能化学, 合成生物学, 高端电子化学品, 酶催化有机合成, 化学动力学,
+                             // 化学遗传性, 高分子合成与加工, 功能团簇材料, 电子电镀, 纯化分离,
+                             // 能源体系工况表征, 质谱仪器与分析, 生物分子的化学生物学, 应用量子化学, 生物核磁,
+                             // 功能高分子, 固体无机化学, 腐蚀和防护, 新能源化工, 仿生智能传感与器件,
+                             // 创新电化学储能体系, 物理有机化学(仪器), 激发态, 环境分析, 金属有机化学(小分子活化),
+                             // 纳米表界面化学, 生命健康电化学, 反应工程
+                             // You can infer this from the description if it is not explicitly mentioned.
+                             // This is a required field, you must fill it with one of the values above.
 }
 ```
-
 You must serialize the Student object you find to a json object and put it in a json block, for example:
 
 ```json
@@ -142,4 +150,5 @@ You must serialize the Student object you find to a json object and put it in a 
 Note that the data in example above is not real, you should replace them with the real data you find.
 You should try to find as much information as possible, but if you can't find some information, just leave them empty. Never ever use any fake data like "Unknown University", "No Email", "John Doe", etc.
 Note that you should strictly follow the schema of the Student object, and the Experience object, and the data type of each field. Don't add any extra fields that are not defined in the schema.
+Note that the markdown file may contain information of multiple students, in this case you ignore all other students and only focus on the mentioned student at the beginning of the input.
 """.strip()
