@@ -9,6 +9,7 @@ import asyncio
 import random
 import json
 import time
+import uuid
 import os
 
 from auto_assist.lib import (
@@ -322,10 +323,14 @@ class HunterCmd:
             # choose the largest file to process
             # TODO: optimize this, for example, merge the json files
             student_json_files = sorted(student_json_files, key=lambda f: os.path.getsize(f), reverse=True)
+            if not student_json_files:
+                logger.warning(f'no json file found in {student_dir}')
+                continue
             student_json_file = student_json_files[0]
-            with open(student_json_file, 'r', encoding='utf-8') as f:
-                student = json_load_file(f)
-                students.append(student)
+            student = json_load_file(student_json_file)
+            student['id'] = str(uuid.uuid4())
+            student['institute'] = index.get('institute', '')
+            students.append(student)
         json_dump_file(students, out_json)
 
     def google_search(self, keyword: str, debug=False):
