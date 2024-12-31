@@ -286,6 +286,7 @@ class HunterCmd:
             excel_autowidth(group_df, writer.sheets['groups'], max_width=150)
             excel_autowidth(candidate_df, writer.sheets['candidates'], max_width=150)
 
+
     def google_search(self, keyword: str, debug=False):
         async def _run():
             async with async_playwright() as pw:
@@ -475,6 +476,76 @@ class HunterCmd:
                 logger.exception(f'fail to parse json data: {cv_md_file}')
                 logger.info(f'answer: {answer}')
                 continue
+
+    async def _async_search_candidate(self, profile: pd.Series, out_dir, page: Page,
+                                      max_search=3, profile_url=None, parse=False):
+        name = profile['name']
+        institute = profile['institute']
+        key = formal_filename(f'{name}-{institute}')
+
+        candidate_dir = os.path.join(out_dir, key)
+        os.makedirs(candidate_dir, exist_ok=True)
+        # dump index.json
+        index_file = os.path.join(candidate_dir, 'index.json')
+        with open(index_file, 'w', encoding='utf-8') as f:
+            f.write(profile.to_json())
+        # run google search
+        gs_result_file = os.path.join(candidate_dir, f'google-search.json')
+        search_keyword = f'{name} {institute} (CV or resume or homepage or profile or linkedin or google scholor)'
+
+        if not os.path.exists(gs_result_file):
+            gs_results = await self._async_google_search(search_keyword, page)
+            json_dump_file(gs_results, gs_result_file)
+        else:
+            gs_results = json_load_file(gs_result_file)
+
+        # retrive data from web page
+        urls = [r['url'] for r in gs_results if valid_cv_url(r['url'])][:max_search]
+        if profile_url:
+            urls.append(profile_url)
+
+        for url in urls:
+            # scrape cv html
+            filename = url_to_key(url)
+            cv_html_file = os.path.join(candidate_dir, f'cv-{filename}')
+            cv_md_file = cv_html_file + '.md'
+            cv_json_file = cv_md_file + '.json'
+
+            if not os.path.exists(cv_html_file):
+                cv_html = await self._async_scrape_url(url, page)
+                cv_html = clean_html(cv_html)
+                with open(cv_html_file, 'w', encoding='utf-8') as f:
+                    f.write(cv_html)
+
+            if not os.path.exists(cv_md_file):
+                self.pandoc_convert(cv_html_file, cv_md_file)
+
+            # parse cv
+            if not parse or os.path.exists(cv_json_file):
+                continue
+
+            with open(cv_md_file, 'r', encoding='utf-8') as f:
+                cv_md_content = f.read()
+            answer = ''
+            try:
+                res = self._get_open_ai_response(
+                    client=self._get_open_ai_client(),
+                    prompt=prompt.RETRIEVE_SCHOLAR_OBJECT,
+                    text='\n'.join([
+                        'Markdown: """',
+                        cv_md_content,
+                        '"""',
+                    ])
+                )
+                answer = res.choices[0].message.content
+                data = next(get_md_code_block(answer, '```json')).strip()
+                obj = json.loads(data)
+                json_dump_file(obj, cv_json_file)
+            except Exception as e:
+                logger.exception(f'fail to parse json data: {cv_md_file}')
+                logger.info(f'answer: {answer}')
+                continue
+
 
     async def _async_search_group(self, group: pd.Series, out_dir, page: Page,
                                   max_search=3, parse=False):

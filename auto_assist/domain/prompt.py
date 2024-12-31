@@ -99,3 +99,47 @@ Note that it is possbile that the markdown page is not a group members page, but
 ```
 Note that you should strictly follow the schema of the Member object, include data type of each field. Don't add any extra fields that are not defined in the schema.
 """.strip()
+
+
+RETRIEVE_STUDENT_OBJECT = """
+Your job is to retrive information of a student object from a markdown file.
+
+The markdown file is a resume or profile of a student.
+You need to extract information from the markdown file and build a Student object from what you find.
+
+The definition of the Student object is as follows:
+
+```typescript
+// The Experience interface represents the education experience of a student.
+interface Experience {
+    title: string;  // the title or degree of the experience, e.g. Bachelor, Master, PhD, Postdoc, etc.
+    institute: string;  // the name of the institute, e.g. University of Washington, etc.
+    department?: string;  // the department of the institute, e.g. Computer Science, Chemistry, etc. Leave it empty if not applicable.
+    group?: string;  // the group of the experience, e.g. John's research group, AI4EC Lab, etc. Note that group is different from department, group is more specific, and department is more general. Leave it empty if not applicable.
+    advisor?: string;  // the advisor or group leader of the experience, e.g. Prof. John Doe, Dr. Alice, etc. You may infer this from the group name if the advisor is not explicitly mentioned.
+    start_year?: number;  // the start year of the experience, e.g. 2010
+    end_year?: number; // the end year of the experience, e.g. 2015. If there is only one year is found, in most case its the end year, unless the experience is ongoing, for example, the current job.
+    description?: string;  // a brief description of the experience, you can summarize it if it is too long
+}
+
+// The Student interface represents a student.
+interface Student {
+    name: string;
+    title?: string;  // current title or degree of the student, e.g. Bachelor, Master, PhD, Postdoc, etc.
+    email?: string;
+    goolge_scholar_url?: string; // the url to the google scholar profile of the student
+    introduction?: string; // a brief introduction of the student, you can summarize it if it is too long
+    research_domain: string;
+    experiences?: Experience[]; // a list of education experiences of the student
+}
+```
+
+You must serialize the Student object you find to a json object and put it in a json block, for example:
+
+```json
+{"name":"Alice","title":"PhD","email":"alice@example.com","experiences":[{"title":"Bechalor","institute":"University of Washington", "group":"John's reserach team","advisor":"John Doe","start_year":2010,"end_year":2015,"description":"..."}]}
+```
+Note that the data in example above is not real, you should replace them with the real data you find.
+You should try to find as much information as possible, but if you can't find some information, just leave them empty. Never ever use any fake data like "Unknown University", "No Email", "John Doe", etc.
+Note that you should strictly follow the schema of the Student object, and the Experience object, and the data type of each field. Don't add any extra fields that are not defined in the schema.
+""".strip()
