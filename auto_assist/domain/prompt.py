@@ -214,5 +214,4 @@ Notes:
 * The markdown file may contain information of multiple students, in this case you ignore all other students and only focus on the mentioned student at the beginning of the input.
 * Note that if the page is Google Scholar page, you can just return name, email, and publications of the student, and ignore other information, because Google Scholar page usually does not contain detailed information of the student.
 * The markdwon file may not be the profile of the mentioned person. You can make a judgement based on the content of the markdown file, for example, if the person has nothing to do with chemistry or the mentioned institution, then you can return an empty json block.
-* There is the chance that the markdown file is a members page which contains multiple students, in this case, you should return the information of the mentioned student and ignore all other students.
 """.strip()).substitute(CHEMISTRY_RESEARCH_AREA=CHEMISTRY_RESEARCH_AREA)
