@@ -288,7 +288,7 @@ class HunterCmd:
             excel_autowidth(candidate_df, writer.sheets['candidates'], max_width=150)
 
     def search_students(self, in_excel, out_dir, max_search=3, max_tries=1,
-                        delay=1, parse=False, sheet_name='candidates', limit=0):
+                        delay=1, parse=False, sheet_name='candidates', limit=0, offset=0):
         df = self.load_excel(in_excel, sheet_name=sheet_name)
         # sort df by title so that we can put missing title to the end
         df = df.sort_values('title', na_position='last')
@@ -302,6 +302,8 @@ class HunterCmd:
                 for i, (_, row) in enumerate(df.iterrows()):
                     if limit > 0 and i >= limit:
                         break
+                    if i < offset:
+                        continue
                     await self._async_search_student(row, out_dir, page,
                                                      max_search=max_search, parse=parse)
         for _ in range(max_tries):
