@@ -596,6 +596,9 @@ class HunterCmd:
                 obj['src'] = url
                 obj.update(gs_linkedin)
                 json_dump_file(obj, cv_json_file)
+            except json.JSONDecodeError as e:
+                json_dump_file({'src': url, 'answer': answer}, cv_json_file)
+                continue
             except Exception as e:
                 logger.exception(f'fail to parse json data: {cv_md_file}')
                 logger.info(f'answer: {answer}')
