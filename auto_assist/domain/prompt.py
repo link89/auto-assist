@@ -213,5 +213,5 @@ Notes:
 * You should strictly follow the schema of the Student object, and the Experience object, and the data type of each field. Don't add any extra fields that are not defined in the schema.
 * The markdown file may contain information of multiple students, in this case you ignore all other students and only focus on the mentioned student at the beginning of the input.
 * Note that if the page is Google Scholar page, you can just return name, email, and publications of the student, and ignore other information, because Google Scholar page usually does not contain detailed information of the student.
-* The markdwon file may not be the profile of the mentioned person. You can make a judgement based on the content of the markdown file, for example, if the person has nothing to do with chemistry or the mentioned institution, then you can return an empty json block.
+* The markdwon file may not be the profile of the mentioned person. You can make a judgement based on the content of the markdown file, for example, if the person has nothing to do with chemistry or the mentioned institution, and you are sure that the person is not the mentioned person, Then you can return an empty json block.
 """.strip()).substitute(CHEMISTRY_RESEARCH_AREA=CHEMISTRY_RESEARCH_AREA)
