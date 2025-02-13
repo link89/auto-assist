@@ -328,6 +328,11 @@ class HunterCmd:
                 continue
             student_json_file = student_json_files[0]
             student = json_load_file(student_json_file)
+
+            # filter out non-graduate students
+            if not is_graduate(student.get('title', '')):
+                continue
+
             student['id'] = str(uuid.uuid4())
             student['institute'] = index.get('institute', '')
             students.append(student)
@@ -579,7 +584,7 @@ class HunterCmd:
                     client=self._get_open_ai_client(),
                     prompt=prompt.RETRIEVE_STUDENT_OBJECT,
                     text='\n'.join([
-                        f'The below is a markdown file related to {name}',
+                        f'The below is the markdown file related to {name} from {institute}',
                         'Markdown: """',
                         cv_md_content,
                         '"""',

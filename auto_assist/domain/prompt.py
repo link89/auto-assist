@@ -1,3 +1,53 @@
+from string import Template
+
+CHEMISTRY_RESEARCH_AREA = '''
+Bioinorganic chemistry
+Catalytic materials
+Chemistry of non-metals
+Radiation and nuclear chemistry
+Carbohydrates
+Combinatorial chemistry
+Molecular architecture and structure
+Nucleic acid chemistry
+Peptide chemistry
+Supramolecular chemistry
+Inorganic chemistry
+Solid state materials
+Chirality
+Heterocyclic chemistry
+Molecular chemistry
+Organic chemistry
+Polymer chemistry
+Synthetic organic chemistry
+Coordination chemistry
+Organometallic chemistry
+Click chemistry
+Macromolecular chemistry
+Natural product synthesis
+Organic reaction mechanisms
+Stereochemistry
+Quantum chemistry
+Separation techniques/extraction
+Analytical chemistry
+Chemistry of condensed matter
+Colloid chemistry
+Electrochemistry, electro dialysis, microfluidics, sensors
+Heterogeneous catalysis
+Mass spectrometry
+Molecular dynamics
+Photochemistry
+Surface chemistry
+Batteries
+Ceramics
+Food chemistry
+Green chemistry
+Materials for sensors
+Nano-materials: oxides, alloys, composite, organic-inorganic hybrid, nanoparticles
+Porous materials, metal organic framework (MOFs)
+Surface modification
+Toxicology
+'''.strip()
+
 RETRIVE_FACULTY_MEMBERS = """
 Your job is to retrive information of faculty members from a markdown file.
 The markdown file will contain multiple faculty members.
@@ -101,7 +151,7 @@ Note that you should strictly follow the schema of the Member object, include da
 """.strip()
 
 
-RETRIEVE_STUDENT_OBJECT = """
+RETRIEVE_STUDENT_OBJECT = Template("""
 Your job is to retrive information of a student object from a markdown file.
 
 The markdown file is a resume or profile of a student.
@@ -113,13 +163,24 @@ The definition of the Student object is as follows:
 // The Experience interface represents the education experience of a student.
 interface Experience {
     title: string;  // the title or degree of the experience, e.g. Bachelor, Master, PhD, Postdoc, etc.
-    institute: string;  // the name of the institute, e.g. University of Washington, etc.
+    institute: string;  // the name of the institute or university
+    is_famous: boolean;  // whether the institute is famous, you can infer this from the name of the institute, include the top 100 universities in the world, or the top 20 universities in China, etc.
     department?: string;  // the department of the institute, e.g. Computer Science, Chemistry, etc. Leave it empty if not applicable.
     group?: string;  // the group of the experience, e.g. John's research group, AI4EC Lab, etc. Note that group is different from department, group is more specific, and department is more general. Leave it empty if not applicable.
     advisor?: string;  // the advisor or group leader of the experience, e.g. Prof. John Doe, Dr. Alice, etc. You may infer this from the group name if the advisor is not explicitly mentioned.
     start_year?: number;  // the start year of the experience, e.g. 2010
     end_year?: number; // the end year of the experience, e.g. 2015. If there is only one year is found, in most case its the end year, unless the experience is ongoing, for example, the current job.
     description?: string;  // a brief description of the experience, you can summarize it if it is too long
+}
+
+// The Publication interface represents a publication of a student.
+
+interface Publication {
+    title: string;  // the title of the publication
+    authors?: string[];  // a list of authors of the publication
+    venue?: string;  // the publication venue, e.g. conference name, journal name, etc. Leave it empty if not applicable.
+
+    is_famous: boolean;  // whether the publication venue is famous, you can infer this from the name of the venue, include Nature index, Nature/Science/Cell family, Journal of Chemical Physics,Journal of Chemical Theory and Computation ,Chemical Science ,Proceedings of the National Academy of Sciences of the United States of America, AICHE Journal ,Chemical Engineering Science ,Biotechnology and Bioengineering, etc.
 }
 
 // The Student interface represents a student.
@@ -131,24 +192,28 @@ interface Student {
     email?: string;
     introduction?: string; // a brief introduction of the student, you can summarize it if it is too long
     experiences?: Experience[]; // a list of education experiences of the student
-    research_domain: string; // the research_domain of the student, should be selected from the following list:
-                             // 人工智能化学, 合成生物学, 高端电子化学品, 酶催化有机合成, 化学动力学,
-                             // 化学遗传性, 高分子合成与加工, 功能团簇材料, 电子电镀, 纯化分离,
-                             // 能源体系工况表征, 质谱仪器与分析, 生物分子的化学生物学, 应用量子化学, 生物核磁,
-                             // 功能高分子, 固体无机化学, 腐蚀和防护, 新能源化工, 仿生智能传感与器件,
-                             // 创新电化学储能体系, 物理有机化学(仪器), 激发态, 环境分析, 金属有机化学(小分子活化),
-                             // 纳米表界面化学, 生命健康电化学, 反应工程
-                             // You can infer this from the description if it is not explicitly mentioned.
-                             // This is a required field, you must fill it with one of the values above.
+
+    research_area: string[]; // a list of research areas of the student, the research area must be selected from the below controlled vocabulary
+
+    publications?: Publication[]; // a list of publications of the student
 }
+
+/** Controlled vocabulary for chemistry research area
+$CHEMISTRY_RESEARCH_AREA
+**/
 ```
+
 You must serialize the Student object you find to a json object and put it in a json block, for example:
 
 ```json
 {"name":"Alice","title":"PhD","email":"alice@example.com","experiences":[{"title":"Bechalor","institute":"University of Washington", "group":"John's reserach team","advisor":"John Doe","start_year":2010,"end_year":2015,"description":"..."}]}
 ```
-Note that the data in example above is not real, you should replace them with the real data you find.
-You should try to find as much information as possible, but if you can't find some information, just leave them empty. Never ever use any fake data like "Unknown University", "No Email", "John Doe", etc.
-Note that you should strictly follow the schema of the Student object, and the Experience object, and the data type of each field. Don't add any extra fields that are not defined in the schema.
-Note that the markdown file may contain information of multiple students, in this case you ignore all other students and only focus on the mentioned student at the beginning of the input.
-""".strip()
+
+Notes:
+* The data in example above is not real, you should replace them with the real data you find.
+* You should try to find as much information as possible, but if you can't find some information, just leave them empty. Never ever use any fake data like "Unknown University", "No Email", "John Doe", etc.
+* You should strictly follow the schema of the Student object, and the Experience object, and the data type of each field. Don't add any extra fields that are not defined in the schema.
+* The markdown file may contain information of multiple students, in this case you ignore all other students and only focus on the mentioned student at the beginning of the input.
+* The markdwon file may not be the profile of the specific student. For example, it may be a page about another person with the same name, or a page of a news that mention the name of the student, etc. In this case, you should judge whether the markdown file is the profile of the student mentioned at the beginning of the input, if not, you should return an empty json block.
+
+""".strip()).substitute(CHEMISTRY_RESEARCH_AREA=CHEMISTRY_RESEARCH_AREA)
