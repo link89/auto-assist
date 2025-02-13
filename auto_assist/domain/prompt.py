@@ -192,9 +192,7 @@ interface Student {
     email?: string;
     introduction?: string; // a brief introduction of the student, you can summarize it if it is too long
     experiences?: Experience[]; // a list of education experiences of the student
-
     research_area: string[]; // a list of research areas of the student, the research area must be selected from the below controlled vocabulary
-
     publications?: Publication[]; // a list of publications of the student
 }
 
@@ -215,6 +213,6 @@ Notes:
 * You should strictly follow the schema of the Student object, and the Experience object, and the data type of each field. Don't add any extra fields that are not defined in the schema.
 * The markdown file may contain information of multiple students, in this case you ignore all other students and only focus on the mentioned student at the beginning of the input.
 * Note that if the page is Google Scholar page, you can just return name, email, and publications of the student, and ignore other information, because Google Scholar page usually does not contain detailed information of the student.
-* The markdwon file may not be the profile of the mentioned person. In this case, you should judge whether the markdown file is the profile of the mentioned at the beginning of the input, if the name and insitute is not matched or have nothing to do with chemistry, you should explain why return an empty json block.
+* The markdwon file may not be the profile of the mentioned person. In this case, you should judge whether the markdown file is the profile of the mentioned at the beginning of the input, if the name and insitute is not matched, then it is not the profile of the mentioned person, you should return an empty json block. But if the name is matched and the person is graduate student in chemistry, then you should return the information of the mentioned student.
 * There is the chance that the markdown file is a members page which contains multiple students, in this case, you should return the information of the mentioned student and ignore all other students.
 """.strip()).substitute(CHEMISTRY_RESEARCH_AREA=CHEMISTRY_RESEARCH_AREA)
