@@ -323,21 +323,32 @@ class HunterCmd:
             index = json_load_file(index_json_file)
             # search the json file of students
             student_json_files = expand_globs([f'{student_dir}\cv-*.md.json'])
-            # choose the largest file to process
-            # TODO: optimize this, for example, merge the json files
-            student_json_files = sorted(student_json_files, key=lambda f: os.path.getsize(f), reverse=True)
             if not student_json_files:
-                logger.warning(f'no json file found in {student_dir}')
                 continue
-            student_json_file = student_json_files[0]
-            student = json_load_file(student_json_file)
 
-            # filter out non-graduate students
+            student_json_files = sorted(student_json_files, key=lambda f: os.path.getsize(f), reverse=True)
+            student_jsons = [json_load_file(f) for f in student_json_files]
+
+            student = student_jsons[0]
             if not is_graduate(student.get('title', '')):
                 continue
 
+            experiences = []
+            publications = []
+            for s in student_jsons:
+                if len(s.get('experiences', [])) > len(experiences):
+                    experiences = s.get('experiences', [])
+                if len(s.get('publications', [])) > len(publications):
+                    publications = s.get('publications', [])
+
+            student['experiences'] = experiences
+            student['publications'] = publications
             student['id'] = str(uuid.uuid4())
             student['institute'] = index.get('institute', '')
+            email = student.get('email', index.get('email'))
+            if email:
+                student['email'] = email
+
             students.append(student)
         json_dump_file(students, out_json)
 
