@@ -1,4 +1,4 @@
-from playwright.async_api import Playwright
+from playwright.async_api import Playwright, Page
 from playwright.async_api import async_playwright
 from contextlib import asynccontextmanager
 
@@ -6,6 +6,7 @@ import asyncio
 import json
 import os
 
+from .asset import get_asset_path
 
 def launch_browser(browser_dir: str, channel='chrome', **kwargs):
     browser_dir = os.path.expanduser(browser_dir)
@@ -61,3 +62,10 @@ class BrowserCmd:
     async def _launch_async(self, browser_dir: str, **kwargs):
         async with async_playwright() as pw:
             yield await launch_browser(browser_dir, **kwargs)(pw)
+
+
+async def page_sleath(page: Page):
+    sleath_js = get_asset_path('sleath.min.js')
+    with open(sleath_js, 'r') as f:
+        await page.add_init_script(sleath_js)
+

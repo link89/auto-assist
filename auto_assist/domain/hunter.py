@@ -1,4 +1,4 @@
-from playwright.async_api import async_playwright, Page
+from playwright.async_api import async_playwright, Page, TimeoutError
 from openai import OpenAI
 from pprint import pprint
 
@@ -19,7 +19,7 @@ from auto_assist.lib import (
     json_load_file, json_dump_file,
     is_chinese_name,
     )
-from auto_assist.browser import launch_browser
+from auto_assist.browser import launch_browser, page_sleath
 from auto_assist import config
 
 from . import prompt
@@ -298,6 +298,7 @@ class HunterCmd:
                 assert isinstance(self._browser_dir, str)
                 browser = await launch_browser(self._browser_dir)(pw)
                 page = browser.pages[0]
+                await page_sleath(page)
                 await page.route('**/*.{png,jpg,jpeg,webp,css,woff,woff2,ttf,svg}', lambda route: route.abort())
                 for i, (_, row) in enumerate(df.iterrows()):
                     if limit > 0 and i >= limit:
@@ -598,14 +599,10 @@ class HunterCmd:
                 obj['src'] = url
                 obj.update(gs_linkedin)
                 json_dump_file(obj, cv_json_file)
-            except StopIteration as e:
+            except Exception as e:
                 logger.exception(f'fail to parse json data: {cv_md_file}')
                 logger.info(f'answer: {answer}')
-                json_dump_file({'src': url, 'answer': answer}, cv_json_file)
-                continue
-            except Exception as e:
-                logger.exception(f'unkown error: {cv_md_file}')
-                logger.info(f'answer: {answer}')
+                json_dump_file({'src': url, 'answer': answer, 'error': str(e) }, cv_json_file)
                 continue
 
     async def _async_search_group(self, group: pd.Series, out_dir, page: Page,
@@ -690,9 +687,15 @@ class HunterCmd:
             await page.mouse.move(x, y)
             await asyncio.sleep(random.uniform(0.1, 0.2))
         await page.click('textarea[name="q"]')
-        await page.fill('textarea[name="q"]', keyword)
+        await page.type('textarea[name="q"]', keyword, delay=random.randint(50, 100))
         await page.press('textarea[name="q"]', 'Enter')
         await page.wait_for_selector('div#search div.g[jscontroller][jsaction]')
+        random_xy_seq = [(random.uniform(100, 500), random.uniform(100, 500))
+                         for _ in range(random.randint(1, 2))]
+        for x, y in random_xy_seq:
+            await page.mouse.move(x, y)
+            await asyncio.sleep(random.uniform(0.1, 0.2))
+
         result = await page.evaluate(
             '''() => Array.from(document.querySelectorAll('div#search div.g[jscontroller][jsaction]')).map(e => ({
             title: e.querySelector('h3')?.innerText,
@@ -713,8 +716,12 @@ class HunterCmd:
         return requests.get(url, proxies=proxies, headers={'User-Agent': user_agent})
 
     async def _async_scrape_url(self, url, page: Page, delay=0.5):
-        await page.goto(url, timeout=60e3)
-        await page.wait_for_load_state('domcontentloaded')
+        try:
+            await page.goto(url, timeout=60e3)
+            await page.wait_for_load_state('domcontentloaded')
+        except TimeoutError as e:
+            logger.exception(f'wait {url} tiemout')
+
         if delay > 0:
             await asyncio.sleep(delay)
         if 'linkedin' in url:
@@ -743,6 +750,7 @@ class HunterCmd:
             messages=messages,  # type: ignore
             stream=False,
             max_tokens=4096 * 2,
+            timeout=100,
         )
         with open(self._openai_log, 'a', encoding='utf-8') as f:
             json.dump(res.model_dump(), f)
