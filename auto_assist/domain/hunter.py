@@ -319,8 +319,11 @@ class HunterCmd:
     def process_students(self, *student_dirs, out_json):
         students = []
         for student_dir in expand_globs(student_dirs):
-            index_json_file = os.path.join(student_dir, 'index.json')
-            index = json_load_file(index_json_file)
+            try:
+                index_json_file = os.path.join(student_dir, 'index.json')
+                index = json_load_file(index_json_file)
+            except:
+                continue
             # search the json file of students
             student_json_files = expand_globs([f'{student_dir}\cv-*.md.json'])
             if not student_json_files:
@@ -330,7 +333,7 @@ class HunterCmd:
             student_jsons = [json_load_file(f) for f in student_json_files]
 
             student = student_jsons[0]
-            if not is_graduate(student.get('title', '')):
+            if not is_graduate(student.get('title') or ''):
                 continue
 
             experiences = []
