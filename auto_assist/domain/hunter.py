@@ -47,6 +47,8 @@ class HunterCmd:
         self._proxy = proxy
         self._browser_dir = browser_dir
         self._openai_log = openai_log
+        self._last_request_ts = 0
+        self._wait_gap = 120
 
     def search_faculties(self, in_excel, out_dir, parse=False, max_tries=3, delay=1):
         """
@@ -343,7 +345,19 @@ class HunterCmd:
                     experiences = s.get('experiences', [])
                 if len(s.get('publications', [])) > len(publications):
                     publications = s.get('publications', [])
-
+            # score: for each is_famous publication or experience  add 10, otherwise add 1
+            score = 0
+            for exp in experiences:
+                if exp.get('is_famous'):
+                    score += 10
+                else:
+                    score += 1
+            for pub in publications:
+                if pub.get('is_famous'):
+                    score += 10
+                else:
+                    score += 1
+            student['score'] = score
             student['experiences'] = experiences
             student['publications'] = publications
             student['id'] = str(uuid.uuid4())
@@ -759,6 +773,11 @@ class HunterCmd:
             {'role': 'system', 'content': prompt},
             {'role': 'user', 'content': text},
         ]
+        elapsed = int(time.time()) - self._last_request_ts
+        if elapsed < self._wait_gap:
+            time.sleep(self._wait_gap - elapsed)
+
+        self._last_request_ts = int(time.time())
         res = client.chat.completions.create(
             model='deepseek-chat',
             messages=messages,  # type: ignore
@@ -844,3 +863,4 @@ def get_linkedin_gs(google_result):
         elif 'scholar.google' in r['url'] and 'google_scholar' not in ret:
             ret['google_scholar'] = r['url']
     return ret
+
