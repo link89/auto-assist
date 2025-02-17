@@ -42,13 +42,13 @@ class HunterCmd:
         :param proxy: str
             The proxy to use for requests and playwright
         """
-        self._pancdo_cmd = pandoc_cmd
+        self._pandoc_cmd = pandoc_cmd
         self._pandoc_opt = pandoc_opt
         self._proxy = proxy
         self._browser_dir = browser_dir
         self._openai_log = openai_log
         self._last_request_ts = 0
-        self._wait_gap = 120
+        self._wait_interval = 180
 
     def search_faculties(self, in_excel, out_dir, parse=False, max_tries=3, delay=1):
         """
@@ -393,7 +393,7 @@ class HunterCmd:
         :param out_md: str
             The output markdown file
         """
-        return sp.check_call(f'{self._pancdo_cmd} {self._pandoc_opt} "{in_html}" -o "{out_md}"', shell=True)
+        return sp.check_call(f'{self._pandoc_cmd} {self._pandoc_opt} "{in_html}" -o "{out_md}"', shell=True)
 
     def convert_html_to_md(self, *html_files: str, out_dir: str):
         """
@@ -774,8 +774,8 @@ class HunterCmd:
             {'role': 'user', 'content': text},
         ]
         elapsed = int(time.time()) - self._last_request_ts
-        if elapsed < self._wait_gap:
-            time.sleep(self._wait_gap - elapsed)
+        if elapsed < self._wait_interval:
+            time.sleep(self._wait_interval - elapsed)
 
         self._last_request_ts = int(time.time())
         res = client.chat.completions.create(
@@ -783,7 +783,7 @@ class HunterCmd:
             messages=messages,  # type: ignore
             stream=False,
             max_tokens=4096 * 2,
-            timeout=100,
+            timeout=180,
         )
         with open(self._openai_log, 'a', encoding='utf-8') as f:
             json.dump(res.model_dump(), f)
