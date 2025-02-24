@@ -818,6 +818,8 @@ def valid_student_url(url):
         return False
     if 'researchgate' in url:
         return False
+    if 'linkedin' in url and 'search' in url:
+        return False
     return True
 
 
