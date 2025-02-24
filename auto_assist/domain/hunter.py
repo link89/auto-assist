@@ -48,7 +48,7 @@ class HunterCmd:
         self._browser_dir = browser_dir
         self._openai_log = openai_log
         self._last_request_ts = 0
-        self._wait_interval = 180
+        self._wait_interval = 0
 
     def search_faculties(self, in_excel, out_dir, parse=False, max_tries=3, delay=1):
         """
@@ -783,7 +783,7 @@ class HunterCmd:
             messages=messages,  # type: ignore
             stream=False,
             max_tokens=4096 * 2,
-            timeout=180,
+            timeout=1800,
         )
         with open(self._openai_log, 'a', encoding='utf-8') as f:
             json.dump(res.model_dump(), f)
@@ -815,6 +815,8 @@ def valid_cv_url(url):
 
 def valid_student_url(url):
     if '.pdf' in url:
+        return False
+    if 'researchgate' in url:
         return False
     return True
 
