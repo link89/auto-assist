@@ -300,7 +300,7 @@ class HunterCmd:
                 assert isinstance(self._browser_dir, str)
                 browser = await launch_browser(self._browser_dir)(pw)
                 page = browser.pages[0]
-                await page_sleath(page)
+                # await page_sleath(page)
                 await page.route('**/*.{png,jpg,jpeg,webp,css,woff,woff2,ttf,svg}', lambda route: route.abort())
                 for i, (_, row) in enumerate(df.iterrows()):
                     if limit > 0 and i >= limit:
@@ -817,6 +817,10 @@ def valid_student_url(url):
     if '.pdf' in url:
         return False
     if 'researchgate' in url:
+        return False
+    if 'ir.pku.edu.cn' in url:
+        return False
+    if '4amap.arizona.edu' in url:
         return False
     if 'linkedin' in url and 'search' in url:
         return False
