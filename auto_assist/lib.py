@@ -97,7 +97,7 @@ def get_md_code_block(md_text: str, start: str, end: str='```'):
             break
         # find the end of code block
         md_text = md_text[start_idx + len(start):]
-        end_idx = md_text.find(end, start_idx)
+        end_idx = md_text.find(end)
         if end_idx == -1:
             break
         yield md_text[:end_idx]
