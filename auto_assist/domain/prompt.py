@@ -84,9 +84,11 @@ The definition of the Scholar object is as follows:
 ```typescript
 // The Experience interface represents the experience of a person,
 // it can be a education experience, a work experience, a research experience, etc.
+
 interface Experience {
-    title: string;  // the title of the experience, e.g. Bachelor, Master, PhD, Postdoc, Professor, Engineer, etc.
-    institute: string;  // the name of the institute, e.g. University of Washington, Google, Microsoft, etc.
+    title: string;  // the title or degree of the experience, e.g. Bachelor, Master, PhD, Postdoc, etc.
+    institute: string;  // the name of the institute or university
+    is_famous: boolean;  // whether the institute is famous, you can infer this from the name of the institute, include the top 100 universities in the world, or the top 20 universities in China, etc.
     department?: string;  // the department of the institute, e.g. Computer Science, Chemistry, etc. Leave it empty if not applicable.
     group?: string;  // the group of the experience, e.g. John's research group, AI4EC Lab, etc. Note that group is different from department, group is more specific, and department is more general. Leave it empty if not applicable.
     advisor?: string;  // the advisor or group leader of the experience, e.g. Prof. John Doe, Dr. Alice, etc. You may infer this from the group name if the advisor is not explicitly mentioned.
@@ -95,31 +97,49 @@ interface Experience {
     description?: string;  // a brief description of the experience, you can summarize it if it is too long
 }
 
+// The Publication interface represents a publication of a scholar.
+interface Publication {
+    title: string;  // the title of the publication
+    authors?: string[];  // a list of authors of the publication
+    venue?: string;  // the publication venue, e.g. conference name, journal name, etc. Leave it empty if not applicable.
+    year?: number;  // the publication year
+    is_famous: boolean;  // whether the publication venue is famous, you can infer this from the name of the venue, include Nature index, Nature/Science/Cell family, Journal of Chemical Physics,Journal of Chemical Theory and Computation ,Chemical Science ,Proceedings of the National Academy of Sciences of the United States of America, AICHE Journal ,Chemical Engineering Science ,Biotechnology and Bioengineering, etc.
+}
+
+
 // The Scholar interface represents a scholar, e.g. a professor, an engineer, etc.
 interface Scholar {
     name: string;
+    is_chinese?: boolean;  // whether the scholar is Chinese, you can infer this from the name or other information, for example, the name is Chinese pinyin, or the scholar is from a Chinese institute, etc.
     title?: string;  // current title of the scholar, e.g. Professor, Associate Professor, Prof, Enginner, etc.
+    birth_year?: number;  // the birth year of the student, e.g 1995
+    age?: number;  // the age of the student, e.g. 26
     email?: string;
-    goolge_scholar_url?: string; // the url to the google scholar profile of the scholar
-    introduction?: string; // a brief introduction of the scholar, you can summarize it if it is too long
-    research_domain: string;  // the research domain of the scholar, e.g. Machine Learning, Computer Vision, etc. You can infer this from the description if it is not explicitly mentioned.
-    experiences?: Experience[]; // a list of experiences
+    introduction?: string; // a brief introduction, summarize it if it is too long
+    experiences?: Experience[]; // a list of education experiences
+    research_area: string[]; // a list of research areas, the research area must be selected from the below controlled vocabulary
+    publications?: Publication[]; // a list of publications
 }
+
+/** Controlled vocabulary for chemistry research area
+$CHEMISTRY_RESEARCH_AREA
+**/
 ```
 
 You must serialize the Scholar object you find to a json object and put it in a json block, for example:
 
 ```json
-{"name":"Alice","title":"Associate Professor","email":"alice@example.com","experiences":[{"title":"PhD","institute":"University of Washington", "group":"John's reserach team","advisor":"John Doe","start_year":2010,"end_year":2015,"description":"..."}]}
+{"name":"Alice","title":"Associate Professor","email":"alice@example.com","experiences":[{"title":"PhD","institute":"University of Washington", "group":"John's research team","advisor":"John Doe","start_year":2010,"end_year":2015,"description":"..."}]}
 ```
-Note that the data in example above is not real, you should replace them with the real data you find.
-You should try to find as much information as possible, but if you can't find some information, just leave them empty. Never ever use any fake data like "Unknown University", "No Email", "John Doe", etc.
-Note that you should strictly follow the schema of the Scholar object, and the Experience object, and the data type of each field. Don't add any extra fields that are not defined in the schema.
+* Note that the data in example above is not real, you should replace them with the real data you find.
+* You should try to find as much information as possible, but if you can't find some information, just leave them empty. Never ever use any fake data like "Unknown University", "No Email", "John Doe", etc.
+* Note that you should strictly follow the schema of the Scholar object, and the Experience object, and the data type of each field. Don't add any extra fields that are not defined in the schema.
 """.strip()
+RETRIEVE_SCHOLAR_OBJECT = Template(RETRIEVE_SCHOLAR_OBJECT).substitute(CHEMISTRY_RESEARCH_AREA=CHEMISTRY_RESEARCH_AREA)
 
 
-RETRIVE_GROUP_MEMBERS = """
-Your job is to retrive information of group members from a markdown file.
+RETRIEVE_GROUP_MEMBERS = """
+Your job is to retrieve information of group members from a markdown file.
 The markdown file is a web page about a research group that contain list of group members.
 
 You need to extract information of all group members from the markdown file and build a list of Member objects from what you find. The Member object is defined as the following TypeScript interface:

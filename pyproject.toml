@@ -21,6 +21,9 @@ name = "bfsu"
 url = "https://mirrors.bfsu.edu.cn/pypi/web/simple"
 priority = "default"
 
+[tool.poetry.scripts]
+auto_assist = "auto_assist:main"
+
 [build-system]
 requires = ["poetry-core"]
 build-backend = "poetry.core.masonry.api"

@@ -114,7 +114,8 @@ class HunterCmd:
                 title = faculty.get('title', '').lower()
                 if not title:
                     logger.warning(f'title is empty for {faculty["name"]} in {faculty_json_file}')
-                if ('assist' in title and 'prof' in title) or ('aprof' in title):
+
+                if is_chinese_name(faculty['name']):
                     candidates.append(faculty)
 
         df = pd.DataFrame(candidates)
@@ -498,12 +499,13 @@ class HunterCmd:
         cv_dir = os.path.join(out_dir, key)
         os.makedirs(cv_dir, exist_ok=True)
         # dump index.json
+
         index_file = os.path.join(cv_dir, 'index.json')
         with open(index_file, 'w', encoding='utf-8') as f:
             f.write(profile.to_json())
 
         # run google search
-        gs_result_file = os.path.join(cv_dir, f'google-search.json')
+        gs_result_file = os.path.join(cv_dir, 'google-search.json')
         search_keyword = f'professor {name} {institute} (CV or resume or homepage or profile)'
 
         if not os.path.exists(gs_result_file):
@@ -513,7 +515,10 @@ class HunterCmd:
             gs_results = json_load_file(gs_result_file)
 
         # retrive data from web page
-        urls = [r['url'] for r in gs_results if valid_cv_url(r['url'])][:max_search]
+        # urls = [r['url'] for r in gs_results if valid_cv_url(r['url'])][:max_search]
+        urls = [r['url'] for r in gs_results][:max_search]
+        # sort the urls by if cv in the title or snippet
+
         if profile_url:
             urls.append(profile_url)
 
@@ -685,7 +690,7 @@ class HunterCmd:
             try:
                 res = self._get_open_ai_response(
                     client=self._get_open_ai_client(),
-                    prompt=prompt.RETRIVE_GROUP_MEMBERS,
+                    prompt=prompt.RETRIEVE_GROUP_MEMBERS,
                     text='\n'.join([
                         'Markdown: """',
                         group_md_content,
