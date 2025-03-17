@@ -224,7 +224,7 @@ $CHEMISTRY_RESEARCH_AREA
 You must serialize the Student object you find to a json object and put it in a json block, for example:
 
 ```json
-{"name":"Alice","title":"PhD","email":"alice@example.com","experiences":[{"title":"Bechalor","institute":"University of Washington", "group":"John's reserach team","advisor":"John Doe","start_year":2010,"end_year":2015,"description":"..."}]}
+{"name":"Alice","title":"PhD","email":"alice@example.com","experiences":[{"title":"Bechalor","institute":"University of Washington", "group":"John's research team","advisor":"John Doe","start_year":2010,"end_year":2015,"description":"..."}]}
 ```
 
 Notes:
@@ -233,7 +233,7 @@ Notes:
 * You should strictly follow the schema of the Student object, and the Experience object, and the data type of each field. Don't add any extra fields that are not defined in the schema.
 * The markdown file may contain information of multiple students, in this case you ignore all other students and only focus on the mentioned student at the beginning of the input.
 *If the page is Google Scholar page, you can just return name, email, and publications of the student, and ignore other information, because Google Scholar page usually does not contain detailed information of the student.
-* The markdwon file may not be the profile of the mentioned person. You can make a judgement based on the content of the markdown file, for example, if the person has nothing to do with chemistry or the mentioned institution, and you are sure that the person is not the mentioned person, Then you can return an empty json block.
+* The markdown file may not be the profile of the mentioned person. You can make a judgement based on the content of the markdown file, for example, if the person has nothing to do with chemistry or the mentioned institution, and you are sure that the person is not the mentioned person, Then you can return an empty json block.
 """.strip()).substitute(CHEMISTRY_RESEARCH_AREA=CHEMISTRY_RESEARCH_AREA)
 
 

@@ -122,8 +122,8 @@ class HunterCmd:
         with open(out_excel, 'wb') as f:
             df.to_excel(f, index=False)
 
-    def search_cvs(self, in_excel, out_dir, max_search=3, max_tries=1, delay=1, parse=False):
-        df = self.load_excel(in_excel)
+    def search_cvs(self, in_excel, out_dir, max_search=3, max_tries=1, delay=1, parse=False, limit=0):
+        df = self.load_excel(in_excel, sheet_name='Sheet1')
         async def _run():
             async with async_playwright() as pw:
                 # setup browser
@@ -131,7 +131,10 @@ class HunterCmd:
                 browser = await launch_browser(self._browser_dir)(pw)
                 page = browser.pages[0]
                 await page.route('**/*.{png,jpg,jpeg,webp,css,woff,woff2,ttf,svg}', lambda route: route.abort())
-                for i, row in df.iterrows():
+
+                for i, (_, row) in enumerate(df.iterrows()):
+                    if limit > 0 and i >= limit:
+                        break
                     await self._async_search_cv(row, out_dir, page,
                                                 max_search=max_search, parse=parse)
         for _ in range(max_tries):
@@ -515,8 +518,7 @@ class HunterCmd:
             gs_results = json_load_file(gs_result_file)
 
         # retrive data from web page
-        # urls = [r['url'] for r in gs_results if valid_cv_url(r['url'])][:max_search]
-        urls = [r['url'] for r in gs_results][:max_search]
+        urls = [r['url'] for r in gs_results if valid_cv_url(r['url'])][:max_search]
         # sort the urls by if cv in the title or snippet
 
         if profile_url:
@@ -813,7 +815,9 @@ def is_graduate(title: str):
 def valid_cv_url(url):
     if '.pdf' in url:
         return False
-    if 'scholar.google' in url:
+    if '.doc' in url:
+        return False
+    if 'www.ch.ntu.edu.tw/facultys/cv' in url:
         return False
     return True
 
